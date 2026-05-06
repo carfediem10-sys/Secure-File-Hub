@@ -86,9 +86,8 @@ export default function HomeTab({ onOpenAi }: Props) {
 
       <header className="bg-white border-b border-gray-100 shadow-sm shrink-0">
         <div className="flex items-center justify-between px-4 h-14">
-          <div className="flex items-center gap-1.5">
-            <div className="w-8 h-8 bg-[#003764] rounded flex items-center justify-center text-white font-black text-[10px]">정부</div>
-            <span className="text-[15px] font-black text-[#003764] tracking-tight">24</span>
+          <div className="flex items-center">
+            <img src="/gov24-logo.png" alt="정부24" className="h-9 w-auto object-contain" />
           </div>
           <div className="flex items-center gap-1">
             <button

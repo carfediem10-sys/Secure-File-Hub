@@ -203,6 +203,7 @@ export default function MobileIdPage() {
             </button>
             <span className="font-bold text-[16px] text-gray-900">모바일신분증</span>
             <div className="w-9" />
+
           </div>
           <div className="flex-1 flex flex-col">
             <div className="flex-1 flex flex-col items-center justify-center gap-6 px-8">
