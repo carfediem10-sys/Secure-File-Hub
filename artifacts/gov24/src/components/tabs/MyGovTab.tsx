@@ -25,7 +25,7 @@ function Toggle({ on, onToggle }: { on: boolean; onToggle: () => void }) {
     <button
       onClick={onToggle}
       className="relative w-12 h-7 rounded-full shrink-0 transition-colors duration-200"
-      style={{ background: on ? "#1a1a1a" : "#D1D5DB" }}
+      style={{ background: on ? "#003764" : "#D1D5DB" }}
     >
       <motion.div
         className="absolute top-[3px] w-[22px] h-[22px] bg-white rounded-full shadow"
@@ -88,7 +88,7 @@ export default function MyGovTab() {
       setGateEnabled(d.gateEnabled ?? false);
       setApprovalMode(d.approvalRequired ?? false);
       setWhitelist(d.whitelist ?? []);
-      if (d.role === "admin") setRole("admin");
+      if (d.role === "admin" && role === "user") setRole("admin");
       if (d.role === "developer") setRole("developer");
       setServerPasswords({ accessPassword: d.accessPassword, adminPassword: d.adminPassword });
     } catch {}
@@ -97,6 +97,7 @@ export default function MyGovTab() {
   async function loadSessions() {
     try {
       const r = await fetch(`/api/gate/sessions?sessionId=${sessionId}`);
+      if (!r.ok) return;
       const d = await r.json();
       if (d.sessions) setSessions(d.sessions);
     } catch {}
@@ -106,7 +107,7 @@ export default function MyGovTab() {
     try {
       const r = await fetch("/api/gate/notice");
       const d = await r.json();
-      if (d.notice) setNotice(d.notice);
+      setNotice(d.notice ?? null);
     } catch {}
   }
 
@@ -114,19 +115,21 @@ export default function MyGovTab() {
     loadConfig();
     loadNotice();
     if (role !== "user") loadSessions();
-  }, [role, sessionId]);
+  }, [role]);
 
   useEffect(() => {
     const d = getUserData();
     if (d.name) { setUser(d); setLoggedIn(true); }
-    refreshAll();
+    loadConfig();
+    loadNotice();
   }, []);
 
   useEffect(() => {
     if (role === "user") return;
+    loadSessions();
     const t = setInterval(loadSessions, 4000);
     return () => clearInterval(t);
-  }, [role, sessionId]);
+  }, [role]);
 
   async function handleAuth() {
     if (!pwInput.trim()) return;
@@ -152,7 +155,7 @@ export default function MyGovTab() {
       body: JSON.stringify({ sessionId, ...updates }),
     });
     const d = await r.json();
-    if (d.error === "admin_only") { showToast("권한이 없습니다"); return false; }
+    if (d.error) { showToast("권한이 없습니다"); return false; }
     return true;
   }
 
@@ -163,7 +166,7 @@ export default function MyGovTab() {
 
   async function toggleApproval() {
     const next = !approvalMode;
-    if (await postConfig({ approvalRequired: next })) { setApprovalMode(next); showToast(next ? "승인 모드 켜짐" : "승인 모드 꺼짐"); }
+    if (await postConfig({ approvalRequired: next })) { setApprovalMode(next); showToast(next ? "승인 모드 켜짐" : "꺼짐"); }
   }
 
   async function addWhitelist() {
@@ -174,13 +177,13 @@ export default function MyGovTab() {
       body: JSON.stringify({ name: wlInput.trim(), sessionId }),
     });
     const d = await r.json();
-    if (d.whitelist) { setWhitelist(d.whitelist); setWlInput(""); }
+    if (d.whitelist) { setWhitelist(d.whitelist); setWlInput(""); showToast(`"${wlInput.trim()}" 화이트리스트 추가`); }
   }
 
   async function removeWhitelist(name: string) {
     const r = await fetch(`/api/gate/whitelist/${encodeURIComponent(name)}?sessionId=${sessionId}`, { method: "DELETE" });
     const d = await r.json();
-    if (d.whitelist) setWhitelist(d.whitelist);
+    if (d.whitelist) { setWhitelist(d.whitelist); showToast("화이트리스트 삭제됨"); }
   }
 
   async function approve(targetId: string) {
@@ -223,14 +226,17 @@ export default function MyGovTab() {
   }
 
   async function savePasswords() {
-    const ok = await postConfig({ accessPassword: newAccessPw || undefined, adminPassword: newAdminPw || undefined, developerPassword: newDevPw || undefined });
-    if (ok) { showToast("비밀번호가 변경됐습니다"); setNewAccessPw(""); setNewAdminPw(""); setNewDevPw(""); loadConfig(); }
+    const ok = await postConfig({
+      accessPassword: newAccessPw || undefined,
+      adminPassword: newAdminPw || undefined,
+      developerPassword: newDevPw || undefined,
+    });
+    if (ok) { showToast("비밀번호 변경됨"); setNewAccessPw(""); setNewAdminPw(""); setNewDevPw(""); loadConfig(); }
   }
 
   function handleLogin() {
     const name = localStorage.getItem("gov24_gate_name") || "홍길동";
-    const data = { name };
-    localStorage.setItem("gov24_user", JSON.stringify(data));
+    localStorage.setItem("gov24_user", JSON.stringify({ name }));
     setUser({ name }); setLoggedIn(true);
     window.dispatchEvent(new Event("storage"));
   }
@@ -281,14 +287,15 @@ export default function MyGovTab() {
   ];
 
   return (
-    <div className="w-full h-full flex flex-col bg-gray-50 overflow-y-auto no-scrollbar">
+    <div className="w-full h-full flex flex-col overflow-hidden">
+      {/* Toast */}
       <AnimatePresence>
         {toast && (
           <motion.div
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
-            className="fixed top-4 left-4 right-4 z-50 bg-green-50 border border-green-200 rounded-xl px-4 py-3 shadow-lg"
+            className="fixed top-4 left-4 right-4 z-50 bg-green-50 border border-green-200 rounded-xl px-4 py-3 shadow-lg pointer-events-none"
           >
             <p className="text-[12px] font-bold text-green-700 text-center">{toast}</p>
           </motion.div>
@@ -306,40 +313,47 @@ export default function MyGovTab() {
               className="fixed bottom-0 left-0 right-0 z-50 bg-white rounded-t-3xl p-5 max-h-[80dvh] overflow-y-auto"
             >
               <div className="flex items-center justify-between mb-4">
-                <h3 className="font-black text-[16px]">상세 정보 — {detailSession.name}</h3>
+                <h3 className="font-black text-[16px]">자세히 보기 — {detailSession.name}</h3>
                 <button onClick={() => setDetailSession(null)} className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
                   <X className="w-4 h-4" />
                 </button>
               </div>
               {detailSession.profile ? (
-                <div className="space-y-3">
-                  {detailSession.profile.photo && (
-                    <div className="flex justify-center mb-4">
-                      <img src={detailSession.profile.photo as string} alt="증명사진" className="w-24 h-32 object-cover rounded-xl border border-gray-200" />
-                    </div>
-                  )}
-                  {[
-                    { label: "이름", key: "name" },
-                    { label: "주소", key: "addr1", extra: (p: Record<string,unknown>) => [p.addr2, p.addr3].filter(Boolean).join(" ") },
-                    { label: "주민번호 앞", key: "numberFront" },
-                    { label: "생년월일", key: "numberFront", format: (v: string) => v ? `${v.slice(0,2)}년 ${v.slice(2,4)}월 ${v.slice(4,6)}일` : "—" },
-                    { label: "발급일자", key: "issueDate" },
-                    { label: "발급기관", key: "issuer" },
-                  ].map(({ label, key, extra, format }) => {
-                    const val = detailSession.profile![key] as string ?? "";
-                    const display = format ? format(val) : extra ? `${val} ${extra(detailSession.profile!)}` : val;
-                    return (
-                      <div key={label} className="flex items-start gap-3 py-2 border-b border-gray-50">
-                        <span className="text-[11px] text-gray-400 font-semibold w-20 shrink-0">{label}</span>
-                        <span className="text-[13px] text-gray-800 font-medium break-all">{display || "—"}</span>
+                <div className="space-y-0">
+                  {/* 사진 */}
+                  <div className="flex justify-center mb-5">
+                    {detailSession.profile.photo ? (
+                      <img
+                        src={detailSession.profile.photo as string}
+                        alt="증명사진"
+                        className="w-28 h-36 object-cover rounded-2xl border-2 border-gray-100 shadow"
+                      />
+                    ) : (
+                      <div className="w-28 h-36 rounded-2xl bg-gray-100 border-2 border-gray-200 flex items-center justify-center text-gray-300 text-[12px] flex-col gap-1">
+                        <div className="text-3xl">👤</div>
+                        <span>사진 없음</span>
                       </div>
-                    );
-                  })}
+                    )}
+                  </div>
+                  {[
+                    { label: "이름", val: detailSession.profile.name as string || "—" },
+                    { label: "주소", val: [detailSession.profile.addr1, detailSession.profile.addr2, detailSession.profile.addr3].filter(Boolean).join(" ") || "—" },
+                    { label: "생년월일", val: (() => { const f = detailSession.profile.numberFront as string; return f ? `${f.slice(0,2)}년 ${f.slice(2,4)}월 ${f.slice(4,6)}일` : "—"; })() },
+                    { label: "주민번호 앞자리", val: (detailSession.profile.numberFront as string) || "—" },
+                    { label: "발급일자", val: (detailSession.profile.issueDate as string) || "—" },
+                    { label: "발급기관", val: (detailSession.profile.issuer as string) || "—" },
+                  ].map(({ label, val }) => (
+                    <div key={label} className="flex items-start gap-3 py-3 border-b border-gray-50">
+                      <span className="text-[11px] text-gray-400 font-bold w-24 shrink-0 pt-0.5">{label}</span>
+                      <span className="text-[13px] text-gray-800 font-medium break-all">{val}</span>
+                    </div>
+                  ))}
                 </div>
               ) : (
-                <div className="text-center py-8 text-gray-400">
-                  <Info className="w-8 h-8 mx-auto mb-2" />
+                <div className="text-center py-10 text-gray-300">
+                  <div className="text-4xl mb-2">📭</div>
                   <p className="text-[13px]">모바일 신분증 정보 없음</p>
+                  <p className="text-[11px] mt-1 text-gray-400">사용자가 모바일 신분증 페이지를 방문하면 표시됩니다</p>
                 </div>
               )}
             </motion.div>
@@ -347,10 +361,10 @@ export default function MyGovTab() {
         )}
       </AnimatePresence>
 
-      {/* Header */}
-      <header className="px-5 py-4 flex items-center justify-between sticky top-0 bg-white z-10 border-b border-gray-100 shrink-0">
+      {/* Sticky Header */}
+      <header className="px-5 py-4 flex items-center justify-between bg-white border-b border-gray-100 shrink-0">
         <h1 className="text-xl font-bold text-gray-900">MY정부24</h1>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1">
           {role !== "user" && (
             <button onClick={refreshAll} className="p-2 text-gray-400 active:text-gray-700">
               <RefreshCw className="w-4 h-4" />
@@ -363,377 +377,406 @@ export default function MyGovTab() {
         </div>
       </header>
 
-      {/* Profile Card */}
-      <section className="bg-white p-5 border-b border-gray-100">
-        <div className="flex items-center gap-4">
-          <div className="w-16 h-16 bg-gradient-to-br from-[#003764] to-blue-500 rounded-full flex items-center justify-center shadow-inner relative">
-            <span className="text-white font-bold text-xl">{initial}</span>
-            <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-white rounded-full flex items-center justify-center shadow-sm">
-              <div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
-                <span className="text-white text-[8px] font-black">✓</span>
-              </div>
-            </div>
-          </div>
-          <div className="flex-1">
-            <h2 className="text-xl font-bold text-gray-900">{displayName}<span className="font-normal text-gray-600 text-base ml-1">님</span></h2>
-            <div className="flex items-center gap-2 mt-1">
-              <span className={`font-bold text-[10px] px-2 py-0.5 rounded-md ${role === "developer" ? "bg-purple-100 text-purple-700" : role === "admin" ? "bg-blue-100 text-[#003764]" : "bg-gray-100 text-gray-600"}`}>
-                {role === "developer" ? "개발자" : role === "admin" ? "관리자" : "일반회원"}
-              </span>
-            </div>
-          </div>
-          <button onClick={() => { setLoggedIn(false); setRole("user"); }} className="text-gray-400">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-        <div className="grid grid-cols-4 gap-3 mt-6">
-          {MY_ITEMS.map(({ Icon, label, count }) => (
-            <div key={label} className="flex flex-col items-center gap-2">
-              <div className="w-14 h-14 bg-gray-50 rounded-2xl flex flex-col items-center justify-center relative">
-                <Icon className="w-6 h-6 text-gray-700" strokeWidth={1.5} />
-                {count > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-[#C60C30] text-white text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full border-2 border-white">{count}</span>
-                )}
-              </div>
-              <span className="text-[11px] font-medium text-gray-700 text-center leading-tight">{label}</span>
-            </div>
-          ))}
-        </div>
-      </section>
+      {/* Scrollable Content */}
+      <div className="flex-1 overflow-y-auto no-scrollbar bg-gray-50 pb-6">
 
-      {/* Admin Auth (if not already admin/dev) */}
-      {role === "user" && (
-        <section className="mx-4 mt-3 bg-white rounded-2xl border border-amber-200 overflow-hidden shadow-sm">
-          <div className="flex items-center gap-2 px-4 py-3 border-b bg-amber-50 border-amber-100">
-            <Shield className="w-4 h-4 text-amber-600" />
-            <p className="font-bold text-[13px] text-amber-800">관리자 / 개발자 인증</p>
+        {/* Profile Card */}
+        <section className="bg-white px-5 py-5 border-b border-gray-100">
+          <div className="flex items-center gap-4">
+            <div className="w-16 h-16 bg-gradient-to-br from-[#003764] to-blue-500 rounded-full flex items-center justify-center shadow relative shrink-0">
+              <span className="text-white font-bold text-xl">{initial}</span>
+              <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-white rounded-full flex items-center justify-center shadow-sm">
+                <div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
+                  <span className="text-white text-[8px] font-black">✓</span>
+                </div>
+              </div>
+            </div>
+            <div className="flex-1">
+              <h2 className="text-xl font-bold text-gray-900">{displayName}<span className="font-normal text-gray-600 text-base ml-1">님</span></h2>
+              <div className="flex items-center gap-2 mt-1">
+                <span className={`font-bold text-[10px] px-2 py-0.5 rounded-md ${role === "developer" ? "bg-purple-100 text-purple-700" : role === "admin" ? "bg-blue-100 text-[#003764]" : "bg-gray-100 text-gray-600"}`}>
+                  {role === "developer" ? "개발자" : role === "admin" ? "관리자" : "일반회원"}
+                </span>
+              </div>
+            </div>
+            <button onClick={() => { setLoggedIn(false); setRole("user"); }} className="text-gray-300">
+              <X className="w-5 h-5" />
+            </button>
           </div>
-          <div className="px-4 py-3 space-y-2">
-            <div className="flex gap-2">
+
+          <div className="grid grid-cols-4 gap-3 mt-5">
+            {MY_ITEMS.map(({ Icon, label, count }) => (
+              <div key={label} className="flex flex-col items-center gap-2">
+                <div className="w-14 h-14 bg-gray-50 rounded-2xl flex flex-col items-center justify-center relative">
+                  <Icon className="w-6 h-6 text-gray-700" strokeWidth={1.5} />
+                  {count > 0 && (
+                    <span className="absolute -top-1 -right-1 bg-[#C60C30] text-white text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full border-2 border-white">{count}</span>
+                  )}
+                </div>
+                <span className="text-[10px] font-medium text-gray-700 text-center leading-tight">{label}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* Admin Auth */}
+        {role === "user" && (
+          <section className="mx-4 mt-4 bg-white rounded-2xl border border-amber-200 overflow-hidden shadow-sm">
+            <div className="flex items-center gap-2 px-4 py-3 border-b bg-amber-50 border-amber-100">
+              <Shield className="w-4 h-4 text-amber-600" />
+              <p className="font-bold text-[13px] text-amber-800">관리자 / 개발자 인증</p>
+            </div>
+            <div className="px-4 py-3 flex gap-2">
               <div className="flex-1 relative">
                 <input
                   type={showPw ? "text" : "password"}
                   value={pwInput}
                   onChange={(e) => setPwInput(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleAuth()}
-                  placeholder="관리자/개발자 비밀번호"
-                  className="w-full h-10 border border-amber-200 rounded-xl pl-3 pr-9 text-[14px] outline-none bg-white"
+                  placeholder="관리자 / 개발자 비밀번호"
+                  className="w-full h-11 border border-amber-200 rounded-xl pl-3 pr-9 text-[14px] outline-none bg-white"
                 />
-                <button onClick={() => setShowPw((p) => !p)} className="absolute right-2.5 top-2.5 text-gray-400">
+                <button onClick={() => setShowPw((p) => !p)} className="absolute right-2.5 top-3 text-gray-400">
                   {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
-              <button onClick={handleAuth} disabled={authLoading || !pwInput.trim()} className="px-4 h-10 text-white rounded-xl font-bold text-[13px] bg-amber-500 disabled:opacity-40">
-                {authLoading ? "중..." : "인증"}
+              <button onClick={handleAuth} disabled={authLoading || !pwInput.trim()} className="px-4 h-11 text-white rounded-xl font-bold text-[13px] bg-amber-500 disabled:opacity-40">
+                {authLoading ? "..." : "인증"}
               </button>
             </div>
-          </div>
-        </section>
-      )}
+          </section>
+        )}
 
-      {/* Admin Panel Buttons */}
-      {role !== "user" && (
-        <section className="mx-4 mt-3 grid grid-cols-2 gap-2">
-          {[
-            { id: "gate" as AdminPanel, Icon: Settings, label: "게이트 설정", color: "#003764", bg: "bg-blue-50" },
-            { id: "visitors" as AdminPanel, Icon: Users, label: `방문자 로그 (${sessions.length})`, color: "#059669", bg: "bg-green-50", badge: sessions.filter(s => s.status === "approved").length },
-            { id: "pending" as AdminPanel, Icon: Clock, label: `승인 대기 (${pendingSessions.length})`, color: "#D97706", bg: "bg-amber-50", badge: pendingSessions.length },
-            ...(role === "developer" ? [{ id: "passwords" as AdminPanel, Icon: Key, label: "비밀번호 관리", color: "#7C3AED", bg: "bg-purple-50" }] : []),
-          ].map(({ id, Icon, label, color, bg, badge }) => (
-            <button
-              key={id}
-              onClick={() => setPanel(panel === id ? "none" : id)}
-              className={`flex items-center gap-2 px-3 py-3 rounded-2xl border-2 transition-all ${panel === id ? "border-current" : "border-transparent bg-white"} ${bg}`}
-              style={{ color }}
-            >
-              <Icon className="w-4 h-4 shrink-0" />
-              <span className="text-[12px] font-bold flex-1 text-left leading-tight">{label}</span>
-              {badge ? <span className="w-5 h-5 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">{badge}</span> : null}
-            </button>
-          ))}
-        </section>
-      )}
-
-      {/* ── GATE SETTINGS PANEL ── */}
-      <AnimatePresence>
-        {panel === "gate" && role !== "user" && (
-          <motion.section
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            className="mx-4 mt-2 bg-white rounded-2xl border-2 border-[#003764] overflow-hidden shadow-md"
-          >
-            <div className="px-4 py-3 bg-[#003764] flex items-center gap-2">
-              <Settings className="w-4 h-4 text-white" />
-              <p className="font-bold text-white text-[14px]">게이트 설정</p>
-            </div>
-            <div className="p-4 space-y-4">
-              <div className="flex items-center justify-between py-2 border-b border-gray-100">
-                <div>
-                  <p className="font-bold text-gray-900 text-[13px]">비밀번호 게이트</p>
-                  <p className="text-[11px] text-gray-400">{gateEnabled ? "켜짐 — 비밀번호로 입장" : "꺼짐 — 누구나 입장"}</p>
+        {/* Admin Panel Buttons (2x2 grid) */}
+        {role !== "user" && (
+          <section className="mx-4 mt-4 grid grid-cols-2 gap-2.5">
+            {[
+              { id: "gate" as AdminPanel, Icon: Settings, label: "게이트 설정", accent: "#003764", light: "bg-blue-50 border-blue-200" },
+              { id: "visitors" as AdminPanel, Icon: Users, label: `방문자 로그`, accent: "#059669", light: "bg-emerald-50 border-emerald-200", badge: sessions.filter(s => s.status === "approved").length },
+              { id: "pending" as AdminPanel, Icon: Clock, label: `승인 대기`, accent: "#D97706", light: "bg-amber-50 border-amber-200", badge: pendingSessions.length },
+              ...(role === "developer" ? [{ id: "passwords" as AdminPanel, Icon: Key, label: "비밀번호 관리", accent: "#7C3AED", light: "bg-purple-50 border-purple-200" }] : []),
+            ].map(({ id, Icon, label, accent, light, badge }) => (
+              <button
+                key={id}
+                onClick={() => setPanel(panel === id ? "none" : id)}
+                className={`flex items-center gap-2.5 px-3.5 py-3.5 rounded-2xl border-2 transition-all ${panel === id ? "border-current" : `border-transparent bg-white`} ${light}`}
+                style={{ color: accent }}
+              >
+                <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0" style={{ background: accent + "18" }}>
+                  <Icon className="w-4 h-4" style={{ color: accent }} />
                 </div>
-                <Toggle on={gateEnabled} onToggle={toggleGate} />
-              </div>
-              <div className="flex items-center justify-between py-2 border-b border-gray-100">
-                <div>
-                  <p className="font-bold text-gray-900 text-[13px]">관리자 승인 모드</p>
-                  <p className="text-[11px] text-gray-400">{approvalMode ? "켜짐 — 승인 후 입장" : "꺼짐 — 비밀번호만으로 입장"}</p>
-                </div>
-                <Toggle on={approvalMode} onToggle={toggleApproval} />
-              </div>
-
-              {/* Whitelist (dev only) */}
-              {role === "developer" && (
-                <div className="py-2 border-b border-gray-100">
-                  <div className="flex items-center gap-1.5 mb-2">
-                    <p className="text-[12px] font-bold text-gray-700">화이트리스트</p>
-                    <span className="px-1.5 py-0.5 bg-green-100 text-green-700 rounded text-[9px] font-bold">승인 면제</span>
-                  </div>
-                  <div className="flex gap-2 mb-2">
-                    <input
-                      value={wlInput}
-                      onChange={(e) => setWlInput(e.target.value.slice(0, 40))}
-                      onKeyDown={(e) => e.key === "Enter" && addWhitelist()}
-                      placeholder="이름 입력"
-                      className="flex-1 h-9 border border-gray-200 rounded-xl px-3 text-[13px] outline-none focus:border-green-400 bg-white"
-                    />
-                    <button onClick={addWhitelist} className="px-3 h-9 bg-green-500 text-white rounded-xl font-bold text-[12px]">
-                      <Plus className="w-4 h-4" />
-                    </button>
-                  </div>
-                  {whitelist.length === 0 ? (
-                    <p className="text-[11px] text-gray-400 text-center py-1">등록된 화이트리스트 없음</p>
-                  ) : (
-                    <div className="flex flex-wrap gap-1.5">
-                      {whitelist.map((name) => (
-                        <div key={name} className="flex items-center gap-1 bg-green-50 border border-green-200 rounded-full pl-3 pr-1 py-1">
-                          <span className="text-[12px] font-bold text-green-800">{name}</span>
-                          <button onClick={() => removeWhitelist(name)} className="w-5 h-5 rounded-full bg-green-200 flex items-center justify-center">
-                            <X className="w-3 h-3 text-green-700" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
+                <div className="flex-1 text-left">
+                  <span className="text-[12px] font-bold block leading-tight">{label}</span>
+                  {badge !== undefined && badge > 0 && (
+                    <span className="text-[10px] font-bold" style={{ color: accent }}>{badge}명</span>
                   )}
                 </div>
-              )}
+              </button>
+            ))}
+          </section>
+        )}
 
-              {/* Notice (dev only) */}
-              {role === "developer" && (
-                <div className="py-2">
-                  <div className="flex items-center gap-1.5 mb-2">
-                    <p className="text-[12px] font-bold text-gray-700">전체 공지</p>
-                    <span className="px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded text-[9px] font-bold">개발자 전용</span>
+        {/* ── GATE SETTINGS PANEL ── */}
+        <AnimatePresence>
+          {panel === "gate" && role !== "user" && (
+            <motion.section
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              className="mx-4 mt-2 overflow-hidden"
+            >
+              <div className="bg-white rounded-2xl border-2 border-[#003764] overflow-hidden shadow-md">
+                <div className="px-4 py-3 bg-[#003764] flex items-center gap-2">
+                  <Settings className="w-4 h-4 text-white" />
+                  <p className="font-bold text-white text-[14px]">게이트 설정</p>
+                </div>
+                <div className="p-4 space-y-4">
+                  <div className="flex items-center justify-between py-2 border-b border-gray-100">
+                    <div>
+                      <p className="font-bold text-gray-900 text-[13px]">비밀번호 게이트</p>
+                      <p className="text-[11px] text-gray-400">{gateEnabled ? "켜짐 — 비밀번호로 입장" : "꺼짐 — 누구나 입장"}</p>
+                    </div>
+                    <Toggle on={gateEnabled} onToggle={toggleGate} />
                   </div>
-                  {notice && (
-                    <div className="mb-2 p-3 bg-blue-50 border border-blue-200 rounded-xl">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex-1">
-                          <p className="text-[13px] font-bold text-gray-900 break-words whitespace-pre-wrap">{notice.text}</p>
-                          <p className="text-[10px] text-gray-500 mt-1">{notice.author ?? ""} · {notice.time}</p>
+                  <div className="flex items-center justify-between py-2 border-b border-gray-100">
+                    <div>
+                      <p className="font-bold text-gray-900 text-[13px]">관리자 승인 모드</p>
+                      <p className="text-[11px] text-gray-400">{approvalMode ? "켜짐 — 승인 후 입장" : "꺼짐 — 비밀번호만으로 입장"}</p>
+                    </div>
+                    <Toggle on={approvalMode} onToggle={toggleApproval} />
+                  </div>
+
+                  {/* Whitelist — dev만 수정, 관리자는 읽기전용 */}
+                  <div className="py-2 border-b border-gray-100">
+                    <div className="flex items-center gap-2 mb-2">
+                      <p className="text-[12px] font-bold text-gray-700">화이트리스트</p>
+                      <span className="px-1.5 py-0.5 bg-green-100 text-green-700 rounded text-[9px] font-bold">승인 면제</span>
+                      {role !== "developer" && <span className="px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded text-[9px] font-bold">읽기 전용</span>}
+                    </div>
+                    {role === "developer" && (
+                      <div className="flex gap-2 mb-2">
+                        <input
+                          value={wlInput}
+                          onChange={(e) => setWlInput(e.target.value.slice(0, 40))}
+                          onKeyDown={(e) => e.key === "Enter" && addWhitelist()}
+                          placeholder="이름 입력"
+                          className="flex-1 h-9 border border-gray-200 rounded-xl px-3 text-[13px] outline-none focus:border-green-400 bg-gray-50"
+                        />
+                        <button onClick={addWhitelist} disabled={!wlInput.trim()} className="px-3 h-9 bg-green-500 text-white rounded-xl font-bold text-[12px] disabled:opacity-40">
+                          <Plus className="w-4 h-4" />
+                        </button>
+                      </div>
+                    )}
+                    {whitelist.length === 0 ? (
+                      <p className="text-[11px] text-gray-400 text-center py-2">등록된 화이트리스트 없음</p>
+                    ) : (
+                      <div className="flex flex-wrap gap-1.5">
+                        {whitelist.map((name) => (
+                          <div key={name} className="flex items-center gap-1 bg-green-50 border border-green-200 rounded-full pl-3 pr-1 py-1">
+                            <span className="text-[12px] font-bold text-green-800">{name}</span>
+                            {role === "developer" && (
+                              <button onClick={() => removeWhitelist(name)} className="w-5 h-5 rounded-full bg-green-200 flex items-center justify-center ml-0.5">
+                                <X className="w-3 h-3 text-green-700" />
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 공지 — dev만 */}
+                  {role === "developer" && (
+                    <div className="py-2">
+                      <div className="flex items-center gap-2 mb-2">
+                        <p className="text-[12px] font-bold text-gray-700">전체 공지</p>
+                        <span className="px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded text-[9px] font-bold">개발자 전용</span>
+                      </div>
+                      {notice && (
+                        <div className="mb-2 p-3 bg-blue-50 border border-blue-200 rounded-xl">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex-1">
+                              <p className="text-[13px] font-bold text-gray-900 break-words whitespace-pre-wrap">{notice.text}</p>
+                              <p className="text-[10px] text-gray-500 mt-1">{notice.author ?? ""} · {notice.time}</p>
+                            </div>
+                            <button onClick={deleteNotice} className="shrink-0 px-2 py-1 bg-red-100 text-red-600 rounded-lg text-[11px] font-bold flex items-center gap-1">
+                              <Trash2 className="w-3 h-3" /> 삭제
+                            </button>
+                          </div>
                         </div>
-                        <button onClick={deleteNotice} className="shrink-0 px-2 py-1 bg-red-100 text-red-600 rounded-lg text-[11px] font-bold flex items-center gap-1">
-                          <Trash2 className="w-3 h-3" /> 삭제
+                      )}
+                      <div className="flex gap-2">
+                        <input
+                          value={noticeInput}
+                          onChange={(e) => setNoticeInput(e.target.value.slice(0, 500))}
+                          onKeyDown={(e) => e.key === "Enter" && postNotice()}
+                          placeholder="공지 내용 입력"
+                          className="flex-1 h-9 border border-purple-200 rounded-xl px-3 text-[13px] outline-none focus:border-purple-400 bg-gray-50"
+                        />
+                        <button onClick={postNotice} disabled={!noticeInput.trim()} className="px-3 h-9 bg-purple-500 text-white rounded-xl font-bold text-[11px] disabled:opacity-40">
+                          {notice ? "교체" : "등록"}
                         </button>
                       </div>
                     </div>
                   )}
-                  <div className="flex gap-2">
-                    <input
-                      value={noticeInput}
-                      onChange={(e) => setNoticeInput(e.target.value.slice(0, 500))}
-                      onKeyDown={(e) => e.key === "Enter" && postNotice()}
-                      placeholder="공지 내용 입력"
-                      className="flex-1 h-9 border border-purple-200 rounded-xl px-3 text-[13px] outline-none focus:border-purple-400 bg-white"
-                    />
-                    <button onClick={postNotice} disabled={!noticeInput.trim()} className="px-3 h-9 bg-purple-500 text-white rounded-xl font-bold text-[11px] disabled:opacity-40">
-                      {notice ? "교체" : "등록"}
-                    </button>
-                  </div>
                 </div>
-              )}
-            </div>
-          </motion.section>
-        )}
-      </AnimatePresence>
-
-      {/* ── VISITOR LOG PANEL ── */}
-      <AnimatePresence>
-        {panel === "visitors" && role !== "user" && (
-          <motion.section
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            className="mx-4 mt-2 bg-white rounded-2xl border-2 border-green-500 overflow-hidden shadow-md"
-          >
-            <div className="px-4 py-3 bg-green-600 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Users className="w-4 h-4 text-white" />
-                <p className="font-bold text-white text-[14px]">방문자 로그</p>
               </div>
-              <button onClick={loadSessions} className="text-white/70 active:text-white">
-                <RefreshCw className="w-4 h-4" />
-              </button>
-            </div>
-            <div className="divide-y divide-gray-50 max-h-[400px] overflow-y-auto no-scrollbar">
-              {sessions.length === 0 ? (
-                <div className="py-8 text-center text-gray-400 text-[13px]">방문자가 없습니다</div>
-              ) : sessions.map((s) => (
-                <div key={s.id} className="px-4 py-3 flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center shrink-0 font-bold text-gray-600 text-[14px]">
-                    {s.name.charAt(0)}
+            </motion.section>
+          )}
+        </AnimatePresence>
+
+        {/* ── VISITOR LOG PANEL ── */}
+        <AnimatePresence>
+          {panel === "visitors" && role !== "user" && (
+            <motion.section
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              className="mx-4 mt-2 overflow-hidden"
+            >
+              <div className="bg-white rounded-2xl border-2 border-emerald-500 overflow-hidden shadow-md">
+                <div className="px-4 py-3 bg-emerald-600 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Users className="w-4 h-4 text-white" />
+                    <p className="font-bold text-white text-[14px]">방문자 로그 ({sessions.length}명)</p>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="font-bold text-[13px] text-gray-900">{s.name}</span>
-                      {statusBadge(s)}
-                      {s.isWhitelisted && <span className="text-[9px] px-1.5 py-0.5 bg-green-100 text-green-700 rounded-full font-bold">화이트</span>}
-                      {s.warnings > 0 && <span className="text-[9px] px-1.5 py-0.5 bg-orange-100 text-orange-700 rounded-full font-bold">경고{s.warnings}</span>}
+                  <button onClick={loadSessions} className="text-white/70 active:text-white">
+                    <RefreshCw className="w-4 h-4" />
+                  </button>
+                </div>
+                <div className="divide-y divide-gray-50">
+                  {sessions.length === 0 ? (
+                    <div className="py-10 text-center text-gray-400 text-[13px]">
+                      <div className="text-3xl mb-2">👥</div>
+                      방문자가 없습니다
                     </div>
-                    <p className="text-[10px] text-gray-400 mt-0.5">{s.time}</p>
-                  </div>
-                  <div className="flex items-center gap-1 shrink-0">
-                    {/* Dev only: warn + details */}
-                    {role === "developer" && s.status === "approved" && (
-                      <>
-                        <button onClick={() => warn(s.id)} title="경고" className="w-7 h-7 rounded-lg bg-orange-50 flex items-center justify-center active:bg-orange-200">
-                          <AlertTriangle className="w-3.5 h-3.5 text-orange-500" />
-                        </button>
-                        <button onClick={() => setDetailSession(s)} title="자세히 보기" className="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center active:bg-blue-200">
-                          <Info className="w-3.5 h-3.5 text-blue-500" />
-                        </button>
-                      </>
-                    )}
-                    {/* Admin + Dev: kick */}
-                    {s.status === "approved" && (
-                      <button onClick={() => kick(s.id)} title="강퇴" className="w-7 h-7 rounded-lg bg-red-50 flex items-center justify-center active:bg-red-200">
-                        <UserX className="w-3.5 h-3.5 text-red-500" />
-                      </button>
-                    )}
-                  </div>
+                  ) : sessions.map((s) => (
+                    <div key={s.id} className="px-4 py-3 flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center shrink-0 font-bold text-gray-600 text-[14px]">
+                        {s.name.charAt(0)}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-bold text-[13px] text-gray-900">{s.name}</span>
+                          {statusBadge(s)}
+                          {s.isWhitelisted && <span className="text-[9px] px-1.5 py-0.5 bg-green-100 text-green-700 rounded-full font-bold">화이트</span>}
+                          {s.warnings > 0 && <span className="text-[9px] px-1.5 py-0.5 bg-orange-100 text-orange-700 rounded-full font-bold">경고{s.warnings}</span>}
+                        </div>
+                        <p className="text-[10px] text-gray-400 mt-0.5 truncate">{s.time}</p>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        {role === "developer" && s.status === "approved" && (
+                          <>
+                            <button onClick={() => warn(s.id)} title="경고" className="w-8 h-8 rounded-xl bg-orange-50 flex items-center justify-center active:bg-orange-200">
+                              <AlertTriangle className="w-4 h-4 text-orange-500" />
+                            </button>
+                            <button onClick={() => setDetailSession(s)} title="자세히 보기" className="w-8 h-8 rounded-xl bg-blue-50 flex items-center justify-center active:bg-blue-200">
+                              <Info className="w-4 h-4 text-blue-500" />
+                            </button>
+                          </>
+                        )}
+                        {s.status === "approved" && (
+                          <button onClick={() => kick(s.id)} title="강퇴" className="w-8 h-8 rounded-xl bg-red-50 flex items-center justify-center active:bg-red-200">
+                            <UserX className="w-4 h-4 text-red-500" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          </motion.section>
-        )}
-      </AnimatePresence>
-
-      {/* ── PENDING APPROVAL PANEL ── */}
-      <AnimatePresence>
-        {panel === "pending" && role !== "user" && (
-          <motion.section
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            className="mx-4 mt-2 bg-white rounded-2xl border-2 border-amber-400 overflow-hidden shadow-md"
-          >
-            <div className="px-4 py-3 bg-amber-500 flex items-center gap-2">
-              <Clock className="w-4 h-4 text-white" />
-              <p className="font-bold text-white text-[14px]">승인 대기 목록</p>
-            </div>
-            <div className="divide-y divide-gray-50 max-h-[300px] overflow-y-auto no-scrollbar">
-              {pendingSessions.length === 0 ? (
-                <div className="py-8 text-center text-gray-400 text-[13px]">대기 중인 사용자가 없습니다</div>
-              ) : pendingSessions.map((s) => (
-                <div key={s.id} className="px-4 py-3 flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-full bg-amber-50 flex items-center justify-center shrink-0 font-bold text-amber-700 text-[14px] border border-amber-200">
-                    {s.name.charAt(0)}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-bold text-[13px] text-gray-900">{s.name}</p>
-                    <p className="text-[10px] text-gray-400">{s.time}</p>
-                  </div>
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <button onClick={() => approve(s.id)} className="flex items-center gap-1 px-2.5 py-1.5 bg-green-500 text-white rounded-xl text-[11px] font-bold">
-                      <CheckCircle className="w-3 h-3" /> 승인
-                    </button>
-                    <button onClick={() => reject(s.id)} className="flex items-center gap-1 px-2.5 py-1.5 bg-red-500 text-white rounded-xl text-[11px] font-bold">
-                      <XCircle className="w-3 h-3" /> 거절
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </motion.section>
-        )}
-      </AnimatePresence>
-
-      {/* ── PASSWORD MANAGEMENT PANEL (dev only) ── */}
-      <AnimatePresence>
-        {panel === "passwords" && role === "developer" && (
-          <motion.section
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            className="mx-4 mt-2 bg-white rounded-2xl border-2 border-purple-400 overflow-hidden shadow-md"
-          >
-            <div className="px-4 py-3 bg-purple-600 flex items-center gap-2">
-              <Key className="w-4 h-4 text-white" />
-              <p className="font-bold text-white text-[14px]">비밀번호 관리</p>
-              <span className="ml-auto text-[10px] bg-white/20 text-white px-2 py-0.5 rounded-full font-bold">개발자 전용</span>
-            </div>
-            <div className="p-4 space-y-3">
-              {serverPasswords.accessPassword && (
-                <div className="p-3 bg-gray-50 rounded-xl border border-gray-200 mb-3">
-                  <p className="text-[11px] text-gray-500 font-bold mb-1">현재 접속 비번</p>
-                  <p className="text-[14px] font-mono font-bold text-gray-800">{serverPasswords.accessPassword}</p>
-                </div>
-              )}
-              {[
-                { label: "접속 비밀번호 (게이트)", value: newAccessPw, onChange: setNewAccessPw, placeholder: "새 접속 비번" },
-                { label: "관리자 비밀번호", value: newAdminPw, onChange: setNewAdminPw, placeholder: "새 관리자 비번" },
-                { label: "개발자 비밀번호", value: newDevPw, onChange: setNewDevPw, placeholder: "새 개발자 비번" },
-              ].map(({ label, value, onChange, placeholder }) => (
-                <div key={label}>
-                  <label className="block text-[11px] font-bold text-gray-500 mb-1">{label}</label>
-                  <div className="relative">
-                    <Lock className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
-                    <input
-                      value={value}
-                      onChange={(e) => onChange(e.target.value)}
-                      placeholder={placeholder}
-                      className="w-full h-10 border border-gray-200 rounded-xl pl-9 pr-3 text-[13px] outline-none focus:border-purple-400 bg-white"
-                    />
-                  </div>
-                </div>
-              ))}
-              <button
-                onClick={savePasswords}
-                disabled={!newAccessPw && !newAdminPw && !newDevPw}
-                className="w-full h-10 bg-purple-600 text-white rounded-xl font-bold text-[13px] disabled:opacity-40"
-              >
-                비밀번호 저장
-              </button>
-              <p className="text-[11px] text-gray-400 text-center">비우면 변경하지 않습니다</p>
-            </div>
-          </motion.section>
-        )}
-      </AnimatePresence>
-
-      {/* Quick links */}
-      <section className="px-5 mt-4 pb-5">
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden divide-y divide-gray-50">
-          {[
-            { Icon: FileText, label: "최근 본 서비스" },
-            { Icon: Settings, label: "회원정보 수정" },
-          ].map(({ Icon: Icon2, label }) => (
-            <button key={label} className="w-full p-4 flex items-center justify-between bg-white">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center">
-                  <Icon2 className="w-4 h-4 text-gray-500" />
-                </div>
-                <span className="font-medium text-gray-800 text-sm">{label}</span>
               </div>
-              <ChevronRight className="w-4 h-4 text-gray-400" />
-            </button>
-          ))}
-        </div>
-      </section>
+            </motion.section>
+          )}
+        </AnimatePresence>
 
-      <div className="py-8 flex flex-col items-center gap-1">
-        <p className="text-[11px] text-gray-300 font-medium tracking-widest uppercase">대한민국 정부</p>
-        <p className="text-[15px] text-gray-400 font-bold">정부24</p>
+        {/* ── PENDING APPROVAL PANEL ── */}
+        <AnimatePresence>
+          {panel === "pending" && role !== "user" && (
+            <motion.section
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              className="mx-4 mt-2 overflow-hidden"
+            >
+              <div className="bg-white rounded-2xl border-2 border-amber-400 overflow-hidden shadow-md">
+                <div className="px-4 py-3 bg-amber-500 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-white" />
+                    <p className="font-bold text-white text-[14px]">승인 대기 목록 ({pendingSessions.length})</p>
+                  </div>
+                  <button onClick={loadSessions} className="text-white/70">
+                    <RefreshCw className="w-4 h-4" />
+                  </button>
+                </div>
+                <div className="divide-y divide-gray-50">
+                  {pendingSessions.length === 0 ? (
+                    <div className="py-10 text-center text-gray-400 text-[13px]">
+                      <div className="text-3xl mb-2">✅</div>
+                      대기 중인 사용자가 없습니다
+                    </div>
+                  ) : pendingSessions.map((s) => (
+                    <div key={s.id} className="px-4 py-3 flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-full bg-amber-50 flex items-center justify-center shrink-0 font-bold text-amber-700 text-[14px] border border-amber-200">
+                        {s.name.charAt(0)}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-bold text-[13px] text-gray-900">{s.name}</p>
+                        <p className="text-[10px] text-gray-400 truncate">{s.time}</p>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button onClick={() => approve(s.id)} className="flex items-center gap-1 px-3 py-1.5 bg-green-500 text-white rounded-xl text-[11px] font-bold active:bg-green-600">
+                          <CheckCircle className="w-3 h-3" /> 승인
+                        </button>
+                        <button onClick={() => reject(s.id)} className="flex items-center gap-1 px-3 py-1.5 bg-red-500 text-white rounded-xl text-[11px] font-bold active:bg-red-600">
+                          <XCircle className="w-3 h-3" /> 거절
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </motion.section>
+          )}
+        </AnimatePresence>
+
+        {/* ── PASSWORD MANAGEMENT (dev only) ── */}
+        <AnimatePresence>
+          {panel === "passwords" && role === "developer" && (
+            <motion.section
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              className="mx-4 mt-2 overflow-hidden"
+            >
+              <div className="bg-white rounded-2xl border-2 border-purple-400 overflow-hidden shadow-md">
+                <div className="px-4 py-3 bg-purple-600 flex items-center gap-2">
+                  <Key className="w-4 h-4 text-white" />
+                  <p className="font-bold text-white text-[14px]">비밀번호 관리</p>
+                  <span className="ml-auto text-[10px] bg-white/20 text-white px-2 py-0.5 rounded-full font-bold">개발자 전용</span>
+                </div>
+                <div className="p-4 space-y-3">
+                  {serverPasswords.accessPassword && (
+                    <div className="p-3 bg-gray-50 rounded-xl border border-gray-200">
+                      <p className="text-[10px] text-gray-500 font-bold mb-1">현재 접속 비번</p>
+                      <p className="text-[14px] font-mono font-bold text-gray-800">{serverPasswords.accessPassword}</p>
+                    </div>
+                  )}
+                  {[
+                    { label: "접속 비밀번호 (게이트)", value: newAccessPw, onChange: setNewAccessPw, ph: "새 접속 비번" },
+                    { label: "관리자 비밀번호", value: newAdminPw, onChange: setNewAdminPw, ph: "새 관리자 비번" },
+                    { label: "개발자 비밀번호", value: newDevPw, onChange: setNewDevPw, ph: "새 개발자 비번 (주의)" },
+                  ].map(({ label, value, onChange, ph }) => (
+                    <div key={label}>
+                      <label className="block text-[11px] font-bold text-gray-500 mb-1">{label}</label>
+                      <div className="relative">
+                        <Lock className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
+                        <input
+                          value={value}
+                          onChange={(e) => onChange(e.target.value)}
+                          placeholder={ph}
+                          className="w-full h-10 border border-gray-200 rounded-xl pl-9 pr-3 text-[13px] outline-none focus:border-purple-400 bg-gray-50"
+                        />
+                      </div>
+                    </div>
+                  ))}
+                  <button
+                    onClick={savePasswords}
+                    disabled={!newAccessPw && !newAdminPw && !newDevPw}
+                    className="w-full h-10 bg-purple-600 text-white rounded-xl font-bold text-[13px] disabled:opacity-40"
+                  >
+                    비밀번호 저장
+                  </button>
+                  <p className="text-[11px] text-gray-400 text-center">비운 항목은 변경하지 않습니다</p>
+                </div>
+              </div>
+            </motion.section>
+          )}
+        </AnimatePresence>
+
+        {/* Quick links */}
+        <section className="px-4 mt-4">
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden divide-y divide-gray-50">
+            {[
+              { Icon: FileText, label: "최근 본 서비스" },
+              { Icon: Settings, label: "회원정보 수정" },
+            ].map(({ Icon: Icon2, label }) => (
+              <button key={label} className="w-full p-4 flex items-center justify-between bg-white active:bg-gray-50">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center">
+                    <Icon2 className="w-4 h-4 text-gray-500" />
+                  </div>
+                  <span className="font-medium text-gray-800 text-sm">{label}</span>
+                </div>
+                <ChevronRight className="w-4 h-4 text-gray-400" />
+              </button>
+            ))}
+          </div>
+        </section>
+
+        <div className="py-8 flex flex-col items-center gap-1">
+          <p className="text-[11px] text-gray-300 font-medium tracking-widest uppercase">대한민국 정부</p>
+          <p className="text-[15px] text-gray-400 font-bold">정부24</p>
+        </div>
       </div>
     </div>
   );
