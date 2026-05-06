@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
-import { ChevronLeft, Menu, Eye, EyeOff, Upload, X } from "lucide-react";
+import { ChevronLeft, Menu, X } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
+import { QRCodeSVG } from "qrcode.react";
 
 const PIN_COUNT = 30;
 
@@ -49,7 +50,7 @@ function shuffleNums() {
 }
 
 function fmt8(d: string) {
-  if (d.length !== 8) return d;
+  if (!d || d.length !== 8) return d || "";
   return `${d.slice(0,2)}.${d.slice(2,4)}.${d.slice(4,6)}.${d.slice(6,8)}`;
 }
 
@@ -85,6 +86,49 @@ async function syncProfile(data: Record<string, unknown>) {
   } catch {}
 }
 
+function buildQrData(res: Record<string, string>) {
+  const payload = {
+    n: res.name || "",
+    f: res.numberFront || "",
+    b: res.numberBack || "",
+    a: [res.addr1, res.addr2, res.addr3].filter(Boolean).join(" "),
+    i: res.issueDate || "",
+    r: res.issuer || "",
+    t: "R",
+    ts: Date.now(),
+  };
+  return "https://gov.kr/verify/" + btoa(unescape(encodeURIComponent(JSON.stringify(payload)))).replace(/\+/g, "-").replace(/\//g, "_");
+}
+
+function buildDLQrData(dl: Record<string, string>) {
+  const payload = {
+    n: dl.dlName || "",
+    f: dl.dlNumFront || "",
+    num: dl.dlNumber || "",
+    type: dl.dlType || "",
+    exp: dl.dlExpiry || "",
+    t: "D",
+    ts: Date.now(),
+  };
+  return "https://gov.kr/verify/" + btoa(unescape(encodeURIComponent(JSON.stringify(payload)))).replace(/\+/g, "-").replace(/\//g, "_");
+}
+
+function DarkToggle({ on, onToggle }: { on: boolean; onToggle: () => void }) {
+  return (
+    <button
+      onClick={onToggle}
+      className="relative w-12 h-7 rounded-full shrink-0 transition-colors duration-200"
+      style={{ background: on ? "#1a1a1a" : "#D1D5DB" }}
+    >
+      <motion.div
+        className="absolute top-[3px] w-[22px] h-[22px] bg-white rounded-full shadow"
+        animate={{ left: on ? "calc(100% - 25px)" : "3px" }}
+        transition={{ type: "spring", stiffness: 500, damping: 30 }}
+      />
+    </button>
+  );
+}
+
 type Screen = "pin" | "auth" | "id";
 type IdTab = "주민등록증" | "운전면허증";
 
@@ -93,18 +137,17 @@ export default function MobileIdPage() {
   const [screen, setScreen] = useState<Screen>("pin");
   const [pin, setPin] = useState("");
   const [timer, setTimer] = useState(PIN_COUNT);
-  const [showId, setShowId] = useState(false);
+  const [showNum, setShowNum] = useState(false);
   const [idTab, setIdTab] = useState<IdTab>("주민등록증");
-  const [showNums, setShowNums] = useState(showId);
   const [nums, setNums] = useState(shuffleNums);
   const [editMode, setEditMode] = useState(false);
+  const [showQr, setShowQr] = useState(false);
   const [toast, setToast] = useState("");
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const [res, setRes] = useState(getResidentData);
   const [dl, setDL] = useState(getDLData);
-
   const [editRes, setEditRes] = useState({ ...getResidentData() });
   const [editDL, setEditDL] = useState({ ...getDLData() });
   const [pendingPhoto, setPendingPhoto] = useState<string | null>(null);
@@ -120,11 +163,23 @@ export default function MobileIdPage() {
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [screen]);
 
+  // Timer countdown when on id screen
+  useEffect(() => {
+    if (screen !== "id") return;
+    timerRef.current = setInterval(() => {
+      setTimer((t) => {
+        if (t <= 1) { clearInterval(timerRef.current!); return 0; }
+        return t - 1;
+      });
+    }, 1000);
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  }, [screen]);
+
   useEffect(() => {
     const rd = getResidentData(); const dd = getDLData();
     setRes(rd); setDL(dd);
     setEditRes({ ...rd }); setEditDL({ ...dd });
-    syncProfile({ ...rd, dlName: dd.dlName, dlNumber: dd.dlNumber, dlType: dd.dlType, dlNumFront: dd.dlNumFront, dlExpiry: dd.dlExpiry, dlIssueDate: dd.dlIssueDate, dlIssuer: dd.dlIssuer, dlAddr1: dd.dlAddr1, dlAddr2: dd.dlAddr2, dlPhoto: dd.photo });
+    syncProfile({ ...rd, dlName: dd.dlName, dlNumber: dd.dlNumber });
   }, []);
 
   function tapNum(val: string) {
@@ -134,7 +189,7 @@ export default function MobileIdPage() {
     const next = pin + val;
     setPin(next);
     if (next.length === 6) {
-      setTimeout(() => { setScreen("auth"); setTimeout(() => { setScreen("id"); }, 1400); }, 200);
+      setTimeout(() => { setScreen("auth"); setTimeout(() => { setScreen("id"); }, 1200); }, 200);
     }
   }
 
@@ -160,251 +215,344 @@ export default function MobileIdPage() {
       saveResidentData(updated); setRes({ ...updated }); syncProfile(updated);
     } else {
       const updated = { ...editDL, photo: pendingPhoto ?? dl.photo ?? "" };
-      saveDLData(updated); setDL({ ...updated }); syncProfile({ dlName: updated.dlName, dlNumber: updated.dlNumber, dlType: updated.dlType, dlNumFront: updated.dlNumFront, dlExpiry: updated.dlExpiry, dlIssueDate: updated.dlIssueDate, dlIssuer: updated.dlIssuer, dlAddr1: updated.dlAddr1, dlAddr2: updated.dlAddr2, dlPhoto: updated.photo });
+      saveDLData(updated); setDL({ ...updated });
     }
     setEditMode(false); setPendingPhoto(null); showToast("저장됐습니다");
   }
 
   const progress = timer / PIN_COUNT;
   const urgent = timer <= 10;
-  const numStr = String(timer).padStart(2, "0");
-  const displayNum = showNums ? `${res.numberFront} - ${res.numberBack}` : `${res.numberFront} - ${"●".repeat((res.numberBack || "1234567").length || 7)}`;
+  const timerStr = String(timer).padStart(2, "0");
 
-  function Field({ label, value, mono = false }: { label: string; value?: string; mono?: boolean }) {
-    return (
-      <div className="flex items-start gap-3 py-2 border-b border-gray-50 last:border-0">
-        <span className="text-[11px] text-gray-400 font-semibold w-20 shrink-0 pt-0.5">{label}</span>
-        <span className={`text-[13px] text-gray-800 ${mono ? "font-mono" : "font-medium"} break-all`}>{value || "—"}</span>
-      </div>
-    );
-  }
-
-  function EditField({ label, value, onChange, placeholder }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string }) {
-    return (
-      <div className="flex items-center gap-2 py-1.5">
-        <span className="text-[11px] text-gray-400 font-semibold w-20 shrink-0">{label}</span>
-        <input
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder={placeholder}
-          className="flex-1 h-9 border border-gray-200 rounded-xl px-3 text-[13px] outline-none focus:border-[#003764] bg-white"
-        />
-      </div>
-    );
-  }
-
+  // ── PIN SCREEN ─────────────────────────────────────────────
   if (screen === "pin") {
     return (
-      <div className="fixed inset-0 flex justify-center bg-[#F2F4F8]" style={{ zIndex: 100 }}>
-        <div className="w-full flex flex-col">
-          <div className="flex items-center justify-between px-4 h-14 bg-white border-b border-gray-100">
-            <button onClick={() => navigate("/")} className="w-9 h-9 flex items-center justify-center">
-              <ChevronLeft className="w-5 h-5 text-gray-800" />
-            </button>
-            <span className="font-bold text-[16px] text-gray-900">모바일신분증</span>
-            <div className="w-9" />
-
-          </div>
-          <div className="flex-1 flex flex-col">
-            <div className="flex-1 flex flex-col items-center justify-center gap-6 px-8">
-              <p className="text-[15px] font-semibold text-gray-700">PIN 번호를 입력하세요</p>
-              <div className="flex gap-4">
-                {Array.from({ length: 6 }).map((_, i) => (
-                  <div key={i} className={`w-3 h-3 rounded-full border-2 ${i < pin.length ? "bg-[#003764] border-[#003764]" : "border-gray-300"}`} />
-                ))}
-              </div>
-              <div className="px-6 w-full max-w-xs">
-                <div className="h-1 bg-gray-200 rounded-full overflow-hidden">
-                  <div className="h-full rounded-full transition-all duration-1000 ease-linear" style={{ width: `${progress * 100}%`, background: urgent ? "#ef4444" : "linear-gradient(90deg,#3B82F6 0%,#8B5CF6 100%)" }} />
-                </div>
-                <div className="flex items-center mt-1.5 gap-1">
-                  <span className="text-[13px] text-gray-500">남은시간</span>
-                  <span className="text-[13px] font-bold tabular-nums" style={{ color: urgent ? "#ef4444" : "#3B82F6" }}>{numStr}초</span>
-                </div>
-              </div>
-            </div>
-            <div className="grid grid-cols-3 gap-0 border-t border-gray-100">
-              {nums.map((n, i) => (
-                <button
-                  key={i}
-                  onClick={() => tapNum(n)}
-                  className={`h-16 flex items-center justify-center text-[22px] font-semibold border-r border-b border-gray-100 ${n === "" ? "opacity-0 pointer-events-none" : "active:bg-gray-100"} ${i % 3 === 2 ? "border-r-0" : ""}`}
-                >
-                  {n}
-                </button>
+      <div className="fixed inset-0 flex flex-col bg-white" style={{ zIndex: 100 }}>
+        <div className="flex items-center justify-between px-4 h-14 border-b border-gray-100">
+          <button onClick={() => navigate("/")} className="w-9 h-9 flex items-center justify-center">
+            <ChevronLeft className="w-5 h-5 text-gray-800" />
+          </button>
+          <span className="font-bold text-[16px] text-gray-900">모바일신분증</span>
+          <div className="w-9" />
+        </div>
+        <div className="flex-1 flex flex-col">
+          <div className="flex-1 flex flex-col items-center justify-center gap-6 px-8">
+            <p className="text-[15px] font-semibold text-gray-700">PIN 번호를 입력하세요</p>
+            <div className="flex gap-4">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className={`w-3 h-3 rounded-full border-2 transition-all ${i < pin.length ? "bg-[#003764] border-[#003764] scale-110" : "border-gray-300"}`} />
               ))}
             </div>
+            <div className="w-full max-w-[260px]">
+              <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                <div
+                  className="h-full rounded-full transition-all duration-1000 ease-linear"
+                  style={{
+                    width: `${progress * 100}%`,
+                    background: urgent ? "#ef4444" : "linear-gradient(90deg,#3B82F6 0%,#8B5CF6 100%)"
+                  }}
+                />
+              </div>
+              <p className="text-[12px] text-center mt-1.5">
+                <span className="text-gray-500">남은시간 </span>
+                <span className="font-bold tabular-nums" style={{ color: urgent ? "#ef4444" : "#3B82F6" }}>
+                  {timerStr}초
+                </span>
+              </p>
+            </div>
+          </div>
+          <div className="grid grid-cols-3 border-t border-gray-100">
+            {nums.map((n, i) => (
+              <button
+                key={i}
+                onClick={() => tapNum(n)}
+                className={`h-16 flex items-center justify-center text-[22px] font-semibold border-r border-b border-gray-100 active:bg-gray-100 select-none ${n === "" ? "pointer-events-none opacity-0" : ""} ${i % 3 === 2 ? "border-r-0" : ""}`}
+              >
+                {n}
+              </button>
+            ))}
           </div>
         </div>
       </div>
     );
   }
 
+  // ── AUTH LOADING ────────────────────────────────────────────
   if (screen === "auth") {
     return (
       <div className="fixed inset-0 flex flex-col items-center justify-center bg-white" style={{ zIndex: 100 }}>
-        <div className="w-16 h-16 border-4 border-[#003764]/30 border-t-[#003764] rounded-full animate-spin mb-4" />
+        <div className="w-16 h-16 border-4 border-[#003764]/20 border-t-[#003764] rounded-full animate-spin mb-4" />
         <p className="text-[14px] text-gray-500 font-medium">인증 중...</p>
       </div>
     );
   }
 
-  return (
-    <div className="fixed inset-0 flex justify-center bg-[#F2F4F8]" style={{ zIndex: 100 }}>
-      <div className="w-full flex flex-col">
+  // ── ID CARD VIEW ────────────────────────────────────────────
+  const currentPhoto = idTab === "주민등록증" ? res.photo : dl.photo;
+  const currentName = idTab === "주민등록증" ? (res.name || "홍길동") : (dl.dlName || "홍길동");
+  const qrData = idTab === "주민등록증" ? buildQrData(res) : buildDLQrData(dl);
+
+  if (editMode) {
+    // ── EDIT MODE ──────────────────────────────────────────────
+    function EF({ label, value, onChange, placeholder, type = "text" }: {
+      label: string; value: string; onChange: (v: string) => void; placeholder?: string; type?: string;
+    }) {
+      return (
+        <div className="mb-3">
+          <label className="block text-[12px] text-gray-500 font-medium mb-1">{label}</label>
+          <input
+            type={type}
+            inputMode={type === "number" ? "numeric" : "text"}
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder={placeholder}
+            className="w-full h-12 border border-gray-300 rounded-xl px-4 text-[14px] outline-none focus:border-[#003764] bg-white"
+          />
+        </div>
+      );
+    }
+
+    return (
+      <div className="fixed inset-0 bg-white flex flex-col" style={{ zIndex: 100 }}>
         <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
-        <AnimatePresence>
-          {toast && (
-            <motion.div
-              initial={{ y: -50, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              exit={{ y: -50, opacity: 0 }}
-              className="absolute top-16 left-4 right-4 z-50 bg-amber-50 border border-amber-300 rounded-xl px-4 py-3 shadow-lg"
-            >
-              <p className="text-[12px] font-bold text-amber-800 text-center">{toast}</p>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        <div className="flex items-center justify-between px-4 h-14 shrink-0 bg-white border-b border-gray-100">
-          <button onClick={() => navigate("/")} className="w-9 h-9 flex items-center justify-center">
-            <ChevronLeft className="w-5 h-5 text-gray-800" />
+        <div className="flex items-center justify-between px-4 h-14 border-b border-gray-100 shrink-0">
+          <button onClick={() => { setEditMode(false); setPendingPhoto(null); }} className="w-9 h-9 flex items-center justify-center">
+            <ChevronLeft className="w-5 h-5" />
           </button>
-          <span className="font-bold text-[16px] text-gray-900">모바일신분증</span>
-          <button onClick={startEdit} className="w-9 h-9 flex items-center justify-center">
-            <Menu className="w-5 h-5 text-gray-700" />
-          </button>
+          <span className="font-bold text-[16px]">만든 색히 - 김중응</span>
+          <div className="w-9" />
         </div>
-
-        <div className="flex border-b border-gray-100 bg-white shrink-0">
-          {(["주민등록증", "운전면허증"] as IdTab[]).map((t) => (
-            <button
-              key={t}
-              onClick={() => setIdTab(t)}
-              className={`flex-1 py-3 text-[13px] font-bold border-b-2 transition-colors ${idTab === t ? "border-[#003764] text-[#003764]" : "border-transparent text-gray-400"}`}
-            >
-              {t}
-            </button>
-          ))}
-        </div>
-
-        <div className="flex-1 overflow-y-auto no-scrollbar">
-          {!editMode ? (
-            <div className="p-5 space-y-4">
-              <div className="w-full rounded-2xl border-2 border-[#003764]/20 overflow-hidden shadow-md">
-                <div className="bg-[#003764] px-4 py-2 flex items-center gap-2">
-                  <div className="w-4 h-4 bg-gradient-to-r from-[#C60C30] via-white to-[#003764] rounded-sm" />
-                  <span className="text-white text-[11px] font-bold">{idTab === "주민등록증" ? "주민등록증 REPUBLIC OF KOREA" : "DRIVER LICENSE REPUBLIC OF KOREA"}</span>
-                </div>
-                <div className="bg-white p-4">
-                  <div className="flex gap-4">
-                    <div className="w-20 h-28 bg-gray-100 rounded-lg overflow-hidden flex items-center justify-center border border-gray-200 shrink-0">
-                      {(idTab === "주민등록증" ? res.photo : dl.photo) ? (
-                        <img src={idTab === "주민등록증" ? res.photo : dl.photo} alt="증명사진" className="w-full h-full object-cover" />
-                      ) : (
-                        <svg width="36" height="36" viewBox="0 0 40 40" fill="none">
-                          <path d="M20 4C14.477 4 10 8.477 10 14C10 17.752 11.96 21.046 14.928 22.91C10.063 24.784 6.5 29.468 6.5 35H9.5C9.5 29.753 14.253 25 20 25C25.747 25 30.5 29.753 30.5 35H33.5C33.5 29.468 29.937 24.784 25.072 22.91C28.04 21.046 30 17.752 30 14C30 8.477 25.523 4 20 4Z" fill="#9CA3AF" />
-                        </svg>
-                      )}
-                    </div>
-                    <div className="flex-1 space-y-1">
-                      <p className="text-[16px] font-black text-gray-900">{idTab === "주민등록증" ? (res.name || "홍 길 동") : (dl.dlName || "홍 길 동")}</p>
-                      {idTab === "주민등록증" ? (
-                        <>
-                          <button
-                            onClick={() => setShowNums((p) => !p)}
-                            className="flex items-center gap-1 text-[12px] font-mono text-gray-700"
-                          >
-                            {displayNum}
-                            {showNums ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
-                          </button>
-                          <p className="text-[11px] text-gray-500">{[res.addr1, res.addr2, res.addr3].filter(Boolean).join(" ") || "서울특별시 관악구 신림로 227"}</p>
-                          <p className="text-[11px] text-gray-400">발급: {fmt8(res.issueDate || "20200315")} {res.issuer || "관악구청장"}</p>
-                        </>
-                      ) : (
-                        <>
-                          <p className="text-[12px] font-mono text-gray-700">{dl.dlNumber || "11-00-000000-00"}</p>
-                          <p className="text-[11px] text-gray-500">{dl.dlType || "1종 보통"}</p>
-                          <p className="text-[11px] text-gray-400">유효: {fmt8(dl.dlIssueDate || "20200315")} ~ {fmt8(dl.dlExpiry || "20280315")}</p>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white rounded-2xl border border-gray-100 p-4">
-                {idTab === "주민등록증" ? (
-                  <>
-                    <Field label="이름" value={res.name} />
-                    <Field label="주민번호 앞" value={res.numberFront} />
-                    <Field label="주민번호 뒤" value={res.numberBack} mono />
-                    <Field label="주소 1" value={res.addr1} />
-                    <Field label="주소 2" value={res.addr2} />
-                    <Field label="주소 3" value={res.addr3} />
-                    <Field label="발급일자" value={fmt8(res.issueDate || "")} />
-                    <Field label="발급기관" value={res.issuer} />
-                  </>
-                ) : (
-                  <>
-                    <Field label="이름" value={dl.dlName} />
-                    <Field label="면허번호" value={dl.dlNumber} mono />
-                    <Field label="면허종별" value={dl.dlType} />
-                    <Field label="주민번호 앞" value={dl.dlNumFront} />
-                    <Field label="갱신기간 만료" value={fmt8(dl.dlExpiry || "")} />
-                    <Field label="발급일자" value={fmt8(dl.dlIssueDate || "")} />
-                    <Field label="발급기관" value={dl.dlIssuer} />
-                    <Field label="주소 1" value={dl.dlAddr1} />
-                    <Field label="주소 2" value={dl.dlAddr2} />
-                  </>
-                )}
-              </div>
-            </div>
+        <div className="flex-1 overflow-y-auto no-scrollbar p-5">
+          {idTab === "주민등록증" ? (
+            <>
+              <EF label="이름" value={editRes.name || ""} onChange={(v) => setEditRes((p) => ({ ...p, name: v }))} placeholder="홍길동" />
+              <EF label="발급일자 (숫자만)" value={editRes.issueDate || ""} onChange={(v) => setEditRes((p) => ({ ...p, issueDate: v.replace(/\D/g, "").slice(0, 8) }))} placeholder="20230627" type="number" />
+              <EF label="주민번호 앞자리 (숫자만)" value={editRes.numberFront || ""} onChange={(v) => setEditRes((p) => ({ ...p, numberFront: v.replace(/\D/g, "").slice(0, 6) }))} placeholder="070204" type="number" />
+              <EF label="주민번호 뒷자리 (숫자만)" value={editRes.numberBack || ""} onChange={(v) => setEditRes((p) => ({ ...p, numberBack: v.replace(/\D/g, "").slice(0, 7) }))} placeholder="3055215" type="number" />
+              <EF label="주소1 (지명)" value={editRes.addr1 || ""} onChange={(v) => setEditRes((p) => ({ ...p, addr1: v }))} placeholder="경기도 파주시" />
+              <EF label="주소2 (도로명)" value={editRes.addr2 || ""} onChange={(v) => setEditRes((p) => ({ ...p, addr2: v }))} placeholder="운정로 67-24" />
+              <EF label="주소3 (상세주소)" value={editRes.addr3 || ""} onChange={(v) => setEditRes((p) => ({ ...p, addr3: v }))} placeholder="7동4호" />
+              <EF label="인증자" value={editRes.issuer || ""} onChange={(v) => setEditRes((p) => ({ ...p, issuer: v }))} placeholder="경기 파주시장" />
+            </>
           ) : (
-            <div className="p-5 space-y-4">
-              <div className="bg-white rounded-2xl border border-gray-100 p-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <button onClick={() => fileRef.current?.click()} className="flex items-center gap-1.5 px-3 py-2 bg-[#003764] text-white rounded-xl text-[12px] font-bold">
-                    <Upload className="w-3 h-3" /> 사진 변경
-                  </button>
-                  {pendingPhoto && <span className="text-[11px] text-green-600 font-medium">새 사진 선택됨</span>}
-                </div>
-                {idTab === "주민등록증" ? (
-                  <>
-                    <EditField label="이름" value={editRes.name || ""} onChange={(v) => setEditRes((p) => ({ ...p, name: v }))} placeholder="홍길동" />
-                    <EditField label="주민번호 앞" value={editRes.numberFront || ""} onChange={(v) => setEditRes((p) => ({ ...p, numberFront: v.replace(/\D/g, "").slice(0, 6) }))} placeholder="900115" />
-                    <EditField label="주민번호 뒤" value={editRes.numberBack || ""} onChange={(v) => setEditRes((p) => ({ ...p, numberBack: v.replace(/\D/g, "").slice(0, 7) }))} placeholder="1234567" />
-                    <EditField label="주소 1" value={editRes.addr1 || ""} onChange={(v) => setEditRes((p) => ({ ...p, addr1: v }))} placeholder="서울특별시 관악구" />
-                    <EditField label="주소 2" value={editRes.addr2 || ""} onChange={(v) => setEditRes((p) => ({ ...p, addr2: v }))} placeholder="신림로 227" />
-                    <EditField label="주소 3" value={editRes.addr3 || ""} onChange={(v) => setEditRes((p) => ({ ...p, addr3: v }))} />
-                    <EditField label="발급일자" value={editRes.issueDate || ""} onChange={(v) => setEditRes((p) => ({ ...p, issueDate: v.replace(/\D/g, "").slice(0, 8) }))} placeholder="20200315" />
-                    <EditField label="발급기관" value={editRes.issuer || ""} onChange={(v) => setEditRes((p) => ({ ...p, issuer: v }))} placeholder="관악구청장" />
-                  </>
-                ) : (
-                  <>
-                    <EditField label="이름" value={editDL.dlName || ""} onChange={(v) => setEditDL((p) => ({ ...p, dlName: v }))} placeholder="홍길동" />
-                    <EditField label="면허번호" value={editDL.dlNumber || ""} onChange={(v) => setEditDL((p) => ({ ...p, dlNumber: v }))} placeholder="11-00-000000-00" />
-                    <EditField label="면허종별" value={editDL.dlType || ""} onChange={(v) => setEditDL((p) => ({ ...p, dlType: v }))} placeholder="1종 보통" />
-                    <EditField label="주민번호 앞" value={editDL.dlNumFront || ""} onChange={(v) => setEditDL((p) => ({ ...p, dlNumFront: v.replace(/\D/g, "").slice(0, 6) }))} placeholder="900115" />
-                    <EditField label="갱신기간 만료" value={editDL.dlExpiry || ""} onChange={(v) => setEditDL((p) => ({ ...p, dlExpiry: v.replace(/\D/g, "").slice(0, 8) }))} placeholder="20280315" />
-                    <EditField label="발급일자" value={editDL.dlIssueDate || ""} onChange={(v) => setEditDL((p) => ({ ...p, dlIssueDate: v.replace(/\D/g, "").slice(0, 8) }))} placeholder="20200315" />
-                    <EditField label="발급기관" value={editDL.dlIssuer || ""} onChange={(v) => setEditDL((p) => ({ ...p, dlIssuer: v }))} placeholder="경기남부경찰청장" />
-                    <EditField label="주소 1" value={editDL.dlAddr1 || ""} onChange={(v) => setEditDL((p) => ({ ...p, dlAddr1: v }))} placeholder="서울특별시 관악구" />
-                    <EditField label="주소 2" value={editDL.dlAddr2 || ""} onChange={(v) => setEditDL((p) => ({ ...p, dlAddr2: v }))} placeholder="신림로 227" />
-                  </>
-                )}
-              </div>
-              <div className="flex gap-3">
-                <button onClick={() => { setEditMode(false); setPendingPhoto(null); }} className="flex-1 h-12 rounded-2xl border-2 border-gray-200 text-gray-600 font-bold flex items-center justify-center gap-1">
-                  <X className="w-4 h-4" /> 취소
-                </button>
-                <button onClick={saveEdit} className="flex-1 h-12 rounded-2xl bg-[#003764] text-white font-bold">
-                  저장
-                </button>
-              </div>
-            </div>
+            <>
+              <EF label="이름" value={editDL.dlName || ""} onChange={(v) => setEditDL((p) => ({ ...p, dlName: v }))} placeholder="홍길동" />
+              <EF label="면허번호" value={editDL.dlNumber || ""} onChange={(v) => setEditDL((p) => ({ ...p, dlNumber: v }))} placeholder="11-00-000000-00" />
+              <EF label="면허종별" value={editDL.dlType || ""} onChange={(v) => setEditDL((p) => ({ ...p, dlType: v }))} placeholder="1종 보통" />
+              <EF label="주민번호 앞자리 (숫자만)" value={editDL.dlNumFront || ""} onChange={(v) => setEditDL((p) => ({ ...p, dlNumFront: v.replace(/\D/g, "").slice(0, 6) }))} placeholder="070204" type="number" />
+              <EF label="발급일자 (숫자만)" value={editDL.dlIssueDate || ""} onChange={(v) => setEditDL((p) => ({ ...p, dlIssueDate: v.replace(/\D/g, "").slice(0, 8) }))} placeholder="20230627" type="number" />
+              <EF label="갱신기간 만료 (숫자만)" value={editDL.dlExpiry || ""} onChange={(v) => setEditDL((p) => ({ ...p, dlExpiry: v.replace(/\D/g, "").slice(0, 8) }))} placeholder="20280315" type="number" />
+              <EF label="주소1 (지명)" value={editDL.dlAddr1 || ""} onChange={(v) => setEditDL((p) => ({ ...p, dlAddr1: v }))} placeholder="경기도 파주시" />
+              <EF label="주소2 (도로명)" value={editDL.dlAddr2 || ""} onChange={(v) => setEditDL((p) => ({ ...p, dlAddr2: v }))} placeholder="운정로 67-24" />
+              <EF label="인증자" value={editDL.dlIssuer || ""} onChange={(v) => setEditDL((p) => ({ ...p, dlIssuer: v }))} placeholder="경기남부경찰청장" />
+            </>
           )}
+          <div className="mb-4">
+            <label className="block text-[12px] text-gray-500 font-medium mb-2">사진</label>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => fileRef.current?.click()}
+                className="h-10 px-5 border border-gray-400 rounded text-[13px] font-medium text-gray-700 bg-white"
+              >
+                파일 선택
+              </button>
+              {pendingPhoto
+                ? <span className="text-[13px] text-gray-600">사진 선택됨 ✓</span>
+                : <span className="text-[13px] text-gray-400">선택된 파일 없음</span>
+              }
+            </div>
+          </div>
         </div>
+        <div className="flex gap-3 px-5 pb-8 pt-3 border-t border-gray-100 shrink-0">
+          <button
+            onClick={() => { setEditMode(false); setPendingPhoto(null); }}
+            className="flex-1 h-14 rounded-2xl border-2 border-gray-300 text-gray-700 font-bold text-[15px]"
+          >
+            닫기
+          </button>
+          <button
+            onClick={saveEdit}
+            className="flex-1 h-14 rounded-2xl bg-[#003764] text-white font-bold text-[15px]"
+          >
+            기기에 정보 저장
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 bg-[#F2F4F8] flex flex-col" style={{ zIndex: 100 }}>
+      <AnimatePresence>
+        {toast && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="fixed top-16 left-4 right-4 z-50 bg-green-50 border border-green-200 rounded-xl px-4 py-3 shadow-lg"
+          >
+            <p className="text-[12px] font-bold text-green-700 text-center">{toast}</p>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* QR Modal */}
+      <AnimatePresence>
+        {showQr && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/70 z-50"
+              onClick={() => setShowQr(false)}
+            />
+            <motion.div
+              initial={{ scale: 0.85, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.85, opacity: 0 }}
+              transition={{ type: "spring", stiffness: 400, damping: 30 }}
+              className="fixed inset-0 z-50 flex items-center justify-center p-8 pointer-events-none"
+            >
+              <div className="bg-white rounded-3xl p-6 shadow-2xl pointer-events-auto flex flex-col items-center gap-4 w-full max-w-[300px]">
+                <div className="flex items-center justify-between w-full">
+                  <p className="font-bold text-[15px] text-gray-900">QR 정보</p>
+                  <button onClick={() => setShowQr(false)} className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
+                    <X className="w-4 h-4 text-gray-600" />
+                  </button>
+                </div>
+                <div className="p-2 border-2 border-gray-100 rounded-2xl">
+                  <QRCodeSVG
+                    value={qrData}
+                    size={220}
+                    level="H"
+                    imageSettings={{
+                      src: "/gov24-logo.png",
+                      x: undefined,
+                      y: undefined,
+                      height: 44,
+                      width: 44,
+                      excavate: true,
+                    }}
+                  />
+                </div>
+                <p className="text-[11px] text-gray-400 text-center leading-relaxed">
+                  {currentName}님의 신분증 QR 코드입니다.<br />30초 후 만료됩니다.
+                </p>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 h-14 bg-white border-b border-gray-100 shrink-0">
+        <button onClick={() => navigate("/")} className="w-9 h-9 flex items-center justify-center">
+          <ChevronLeft className="w-5 h-5 text-gray-800" />
+        </button>
+        <span className="font-bold text-[16px] text-gray-900">모바일신분증</span>
+        <button onClick={startEdit} className="w-9 h-9 flex items-center justify-center">
+          <Menu className="w-5 h-5 text-gray-700" />
+        </button>
+      </div>
+
+      {/* Tab Bar */}
+      <div className="flex bg-white border-b border-gray-100 shrink-0">
+        {(["주민등록증", "운전면허증"] as IdTab[]).map((t) => (
+          <button
+            key={t}
+            onClick={() => setIdTab(t)}
+            className={`flex-1 py-3 text-[13px] font-bold border-b-2 transition-colors ${idTab === t ? "border-[#003764] text-[#003764]" : "border-transparent text-gray-400"}`}
+          >
+            {t}
+          </button>
+        ))}
+      </div>
+
+      {/* Card + Controls */}
+      <div className="flex-1 overflow-y-auto no-scrollbar px-5 py-5 flex flex-col gap-4">
+        {/* ID Card */}
+        <div className="bg-white rounded-3xl shadow-lg overflow-hidden border border-gray-100">
+          {/* Photo */}
+          <div className="flex justify-center pt-6 pb-4">
+            <div className="w-36 h-44 bg-gray-100 rounded-2xl overflow-hidden border border-gray-200 flex items-center justify-center">
+              {currentPhoto ? (
+                <img src={currentPhoto} alt="증명사진" className="w-full h-full object-cover" />
+              ) : (
+                <div className="flex flex-col items-center gap-2 text-gray-300">
+                  <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+                    <path d="M24 5C17.373 5 12 10.373 12 17C12 21.302 14.352 25.054 17.914 27.09C11.875 29.54 7.5 35.481 7.5 42.5H10.5C10.5 35.873 16.373 30 24 30C31.627 30 37.5 35.873 37.5 42.5H40.5C40.5 35.481 36.125 29.54 30.086 27.09C33.648 25.054 36 21.302 36 17C36 10.373 30.627 5 24 5Z" fill="currentColor"/>
+                  </svg>
+                  <span className="text-[11px]">사진 없음</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Info */}
+          <div className="px-5 pb-5 space-y-1.5">
+            <p className="text-[24px] font-black text-gray-900">{currentName}</p>
+
+            {idTab === "주민등록증" ? (
+              <>
+                <div className="flex items-center justify-between">
+                  <p className="text-[15px] font-bold font-mono text-gray-800">
+                    {res.numberFront || "070204"} - {showNum ? (res.numberBack || "3055215") : (res.numberBack ? res.numberBack.slice(0,1) + "●●●●●●" : "3●●●●●●")}
+                  </p>
+                  <DarkToggle on={showNum} onToggle={() => setShowNum((p) => !p)} />
+                </div>
+                <p className="text-[13px] text-gray-600">
+                  {[res.addr1, res.addr2].filter(Boolean).join(" ") || "경기도 파주시 운정로 67-24"}
+                </p>
+                {res.addr3 && <p className="text-[13px] text-gray-600">{res.addr3}</p>}
+                <div className="pt-1 space-y-0.5">
+                  <p className="text-[13px] text-gray-500">{fmt8(res.issueDate || "20230627")}</p>
+                  <p className="text-[12px] text-gray-400">{res.issuer || "경기 파주시장"}</p>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="flex items-center justify-between">
+                  <p className="text-[14px] font-bold font-mono text-gray-800">{dl.dlNumber || "11-00-000000-00"}</p>
+                  <DarkToggle on={showNum} onToggle={() => setShowNum((p) => !p)} />
+                </div>
+                <p className="text-[13px] text-gray-600">{dl.dlType || "1종 보통"}</p>
+                <p className="text-[13px] text-gray-600">
+                  {dl.dlNumFront || "070204"} - {showNum ? "●●●●●●●" : "●●●●●●●"}
+                </p>
+                <p className="text-[13px] text-gray-500">유효: {fmt8(dl.dlIssueDate || "20230627")} ~ {fmt8(dl.dlExpiry || "20280315")}</p>
+                <p className="text-[12px] text-gray-400">{dl.dlIssuer || "경기남부경찰청장"}</p>
+              </>
+            )}
+
+            {/* Timer bar inside card */}
+            <div className="pt-3">
+              <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                <div
+                  className="h-full rounded-full transition-all duration-1000 ease-linear"
+                  style={{
+                    width: `${progress * 100}%`,
+                    background: urgent ? "#ef4444" : "linear-gradient(90deg,#3B82F6 0%,#8B5CF6 100%)"
+                  }}
+                />
+              </div>
+              <p className="text-[12px] mt-1">
+                <span className="text-gray-500">남은시간 </span>
+                <span className="font-bold tabular-nums" style={{ color: urgent ? "#ef4444" : "#3B82F6" }}>
+                  {timerStr}초
+                </span>
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* QR Button */}
+        <button
+          onClick={() => setShowQr(true)}
+          className="w-full h-14 rounded-2xl bg-[#1a1a1a] text-white font-bold text-[16px] shadow-md active:scale-[0.98] transition-transform"
+        >
+          QR정보 표시
+        </button>
       </div>
     </div>
   );

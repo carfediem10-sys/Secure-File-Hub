@@ -26,12 +26,13 @@ interface Notice {
   time: string;
 }
 
-const config: GateConfig = {
+const config: GateConfig & { accessPassword: string } = {
   gateEnabled: false,
   approvalRequired: false,
   whitelist: [],
-  adminPassword: "admin1234",
-  developerPassword: "dev9999",
+  adminPassword: "관리자123",
+  developerPassword: "roqkfwk!!",
+  accessPassword: "yunu",
 };
 
 const sessions = new Map<string, Session>();
