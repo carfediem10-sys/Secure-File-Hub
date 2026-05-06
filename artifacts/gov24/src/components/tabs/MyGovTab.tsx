@@ -127,7 +127,7 @@ export default function MyGovTab() {
   useEffect(() => {
     if (role === "user") return;
     loadSessions();
-    const t = setInterval(loadSessions, 4000);
+    const t = setInterval(loadSessions, 2000);
     return () => clearInterval(t);
   }, [role]);
 
@@ -599,6 +599,10 @@ export default function MyGovTab() {
                   <div className="flex items-center gap-2">
                     <Users className="w-4 h-4 text-white" />
                     <p className="font-bold text-white text-[14px]">방문자 로그 ({sessions.length}명)</p>
+                    <span className="flex items-center gap-1 bg-white/20 rounded-full px-2 py-0.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-green-300 live-dot" />
+                      <span className="text-[9px] text-white font-bold">실시간</span>
+                    </span>
                   </div>
                   <button onClick={loadSessions} className="text-white/70 active:text-white">
                     <RefreshCw className="w-4 h-4" />
@@ -662,7 +666,11 @@ export default function MyGovTab() {
                 <div className="px-4 py-3 bg-amber-500 flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Clock className="w-4 h-4 text-white" />
-                    <p className="font-bold text-white text-[14px]">승인 대기 목록 ({pendingSessions.length})</p>
+                    <p className="font-bold text-white text-[14px]">승인 대기 ({pendingSessions.length})</p>
+                    <span className="flex items-center gap-1 bg-white/20 rounded-full px-2 py-0.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-yellow-200 live-dot" />
+                      <span className="text-[9px] text-white font-bold">실시간</span>
+                    </span>
                   </div>
                   <button onClick={loadSessions} className="text-white/70">
                     <RefreshCw className="w-4 h-4" />

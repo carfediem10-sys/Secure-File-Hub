@@ -1,18 +1,52 @@
 {
   "name": "정부24",
   "short_name": "정부24",
-  "description": "대한민국 공식 전자정부 서비스",
+  "description": "대한민국 공식 전자정부 서비스 — 민원, 증명서, 혜택을 한 곳에서",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
   "background_color": "#003764",
   "theme_color": "#003764",
-  "orientation": "portrait",
+  "orientation": "portrait-primary",
+  "lang": "ko",
+  "categories": ["government", "utilities"],
   "icons": [
+    {
+      "src": "/gov24-logo.png",
+      "sizes": "72x72",
+      "type": "image/png"
+    },
+    {
+      "src": "/gov24-logo.png",
+      "sizes": "96x96",
+      "type": "image/png"
+    },
+    {
+      "src": "/gov24-logo.png",
+      "sizes": "128x128",
+      "type": "image/png"
+    },
+    {
+      "src": "/gov24-logo.png",
+      "sizes": "144x144",
+      "type": "image/png"
+    },
+    {
+      "src": "/gov24-logo.png",
+      "sizes": "152x152",
+      "type": "image/png"
+    },
+    {
+      "src": "/gov24-logo.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    },
     {
       "src": "/gov24-logo.png",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
     },
     {
       "src": "/gov24-logo.png",

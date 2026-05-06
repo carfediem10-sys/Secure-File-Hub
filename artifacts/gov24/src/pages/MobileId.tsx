@@ -319,7 +319,7 @@ export default function MobileIdPage() {
           <button onClick={() => { setEditMode(false); setPendingPhoto(null); }} className="w-9 h-9 flex items-center justify-center">
             <ChevronLeft className="w-5 h-5" />
           </button>
-          <span className="font-bold text-[16px]">만든 색히 - 김중응</span>
+          <span className="font-bold text-[16px]">신분증 정보 수정</span>
           <div className="w-9" />
         </div>
         <div className="flex-1 overflow-y-auto no-scrollbar p-5">
@@ -404,41 +404,72 @@ export default function MobileIdPage() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/70 z-50"
+              className="fixed inset-0 bg-black/75 z-50"
               onClick={() => setShowQr(false)}
             />
             <motion.div
-              initial={{ scale: 0.85, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.85, opacity: 0 }}
-              transition={{ type: "spring", stiffness: 400, damping: 30 }}
-              className="fixed inset-0 z-50 flex items-center justify-center p-8 pointer-events-none"
+              initial={{ scale: 0.88, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.88, opacity: 0, y: 20 }}
+              transition={{ type: "spring", stiffness: 380, damping: 28 }}
+              className="fixed inset-0 z-50 flex items-center justify-center px-8 pointer-events-none"
             >
-              <div className="bg-white rounded-3xl p-6 shadow-2xl pointer-events-auto flex flex-col items-center gap-4 w-full max-w-[300px]">
+              <div className="bg-white rounded-3xl p-5 shadow-2xl pointer-events-auto flex flex-col items-center gap-3 w-full max-w-[280px]">
+                {/* Header */}
                 <div className="flex items-center justify-between w-full">
-                  <p className="font-bold text-[15px] text-gray-900">QR 정보</p>
-                  <button onClick={() => setShowQr(false)} className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
+                  <div>
+                    <p className="font-black text-[15px] text-gray-900">신분증 QR</p>
+                    <p className="text-[11px] text-gray-400">{idTab} · {currentName}</p>
+                  </div>
+                  <button
+                    onClick={() => setShowQr(false)}
+                    className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center"
+                    style={{ WebkitTapHighlightColor: "transparent" }}
+                  >
                     <X className="w-4 h-4 text-gray-600" />
                   </button>
                 </div>
-                <div className="p-2 border-2 border-gray-100 rounded-2xl">
+
+                {/* QR — white background, high contrast for camera */}
+                <div className="bg-white p-3 border border-gray-200 rounded-2xl shadow-inner">
                   <QRCodeSVG
                     value={qrData}
-                    size={220}
-                    level="H"
+                    size={200}
+                    level="Q"
+                    bgColor="#FFFFFF"
+                    fgColor="#000000"
                     imageSettings={{
                       src: "/gov24-logo.png",
                       x: undefined,
                       y: undefined,
-                      height: 44,
-                      width: 44,
+                      height: 36,
+                      width: 36,
                       excavate: true,
                     }}
                   />
                 </div>
-                <p className="text-[11px] text-gray-400 text-center leading-relaxed">
-                  {currentName}님의 신분증 QR 코드입니다.<br />30초 후 만료됩니다.
-                </p>
+
+                {/* Timer bar */}
+                <div className="w-full">
+                  <div className="h-1 bg-gray-200 rounded-full overflow-hidden">
+                    <div
+                      className="h-full rounded-full transition-all duration-1000 ease-linear"
+                      style={{
+                        width: `${progress * 100}%`,
+                        background: urgent ? "#ef4444" : "linear-gradient(90deg,#3B82F6,#8B5CF6)"
+                      }}
+                    />
+                  </div>
+                  <p className="text-[11px] text-center mt-1.5 text-gray-400">
+                    {timer > 0
+                      ? <><span className="font-bold tabular-nums" style={{ color: urgent ? "#ef4444" : "#3B82F6" }}>{timerStr}초</span> 후 만료</> 
+                      : <span className="text-red-500 font-bold">만료됨 — 다시 인증하세요</span>
+                    }
+                  </p>
+                </div>
+
+                {/* Scan hint */}
+                <p className="text-[10px] text-gray-300 text-center">카메라로 QR을 스캔하세요</p>
               </div>
             </motion.div>
           </>
