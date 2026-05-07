@@ -58,36 +58,32 @@
     -webkit-touch-callout: none;
   }
 
-  html, body {
+  html {
     height: 100%;
-    width: 100%;
-    overflow: hidden;
-    position: fixed;
     overscroll-behavior: none;
   }
 
   body {
     @apply bg-background text-foreground;
     font-family: var(--app-font-sans);
+    /* Do NOT use position:fixed or overflow:hidden on body —
+       it breaks the iOS keyboard (input focus causes keyboard to dismiss) */
+    height: 100%;
     overscroll-behavior: none;
-    touch-action: pan-y;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
 
   #root {
-    height: 100%;
+    /* 100dvh shrinks when the iOS/Android keyboard opens, keeping the app in view */
+    height: 100dvh;
     width: 100%;
     overflow: hidden;
+    position: relative;
   }
 
   input, textarea, button {
     font-family: inherit;
-  }
-
-  /* Prevent iOS rubber-band scrolling on root */
-  body > #root {
-    overscroll-behavior: none;
   }
 }
 

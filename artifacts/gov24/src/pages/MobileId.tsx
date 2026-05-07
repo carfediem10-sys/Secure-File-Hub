@@ -294,19 +294,29 @@ export default function MobileIdPage() {
 
   if (editMode) {
     // ── EDIT MODE ──────────────────────────────────────────────
-    function EF({ label, value, onChange, placeholder, type = "text" }: {
-      label: string; value: string; onChange: (v: string) => void; placeholder?: string; type?: string;
+    // type="text" + inputMode 사용 — type="number"는 iOS에서 키보드 자동 내림 버그 있음
+    function EF({ label, value, onChange, placeholder, numeric = false }: {
+      label: string; value: string; onChange: (v: string) => void; placeholder?: string; numeric?: boolean;
     }) {
       return (
-        <div className="mb-3">
-          <label className="block text-[12px] text-gray-500 font-medium mb-1">{label}</label>
+        <div className="mb-4">
+          <label className="block text-[12px] text-gray-500 font-bold mb-1.5">{label}</label>
           <input
-            type={type}
-            inputMode={type === "number" ? "numeric" : "text"}
+            type="text"
+            inputMode={numeric ? "numeric" : "text"}
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="off"
+            spellCheck={false}
             value={value}
             onChange={(e) => onChange(e.target.value)}
+            onFocus={(e) => {
+              // 키보드 열린 후 해당 입력창이 보이도록 스크롤
+              setTimeout(() => e.target.scrollIntoView({ behavior: "smooth", block: "center" }), 300);
+            }}
             placeholder={placeholder}
-            className="w-full h-12 border border-gray-300 rounded-xl px-4 text-[14px] outline-none focus:border-[#003764] bg-white"
+            className="w-full h-13 border-2 border-gray-200 rounded-xl px-4 text-[15px] outline-none focus:border-[#003764] bg-white transition-colors"
+            style={{ fontSize: "16px" /* 16px 미만이면 iOS가 자동 줌인하며 키보드 튐 */ }}
           />
         </div>
       );
@@ -314,68 +324,82 @@ export default function MobileIdPage() {
 
     return (
       <div className="fixed inset-0 bg-white flex flex-col" style={{ zIndex: 100 }}>
-        <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
-        <div className="flex items-center justify-between px-4 h-14 border-b border-gray-100 shrink-0">
+        <input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFileChange} />
+
+        {/* 헤더 */}
+        <div className="flex items-center justify-between px-4 h-14 border-b border-gray-100 shrink-0 bg-white">
           <button onClick={() => { setEditMode(false); setPendingPhoto(null); }} className="w-9 h-9 flex items-center justify-center">
             <ChevronLeft className="w-5 h-5" />
           </button>
           <span className="font-bold text-[16px]">신분증 정보 수정</span>
-          <div className="w-9" />
+          {/* 저장 버튼을 헤더에도 배치 — 키보드 올라와도 접근 가능 */}
+          <button
+            onClick={saveEdit}
+            className="px-3 h-8 bg-[#003764] text-white rounded-lg font-bold text-[13px]"
+          >
+            저장
+          </button>
         </div>
-        <div className="flex-1 overflow-y-auto no-scrollbar p-5">
+
+        {/* 스크롤 영역 — 키보드 열렸을 때 하단까지 충분한 패딩 */}
+        <div className="flex-1 overflow-y-auto no-scrollbar px-5 pt-4 pb-60">
           {idTab === "주민등록증" ? (
             <>
               <EF label="이름" value={editRes.name || ""} onChange={(v) => setEditRes((p) => ({ ...p, name: v }))} placeholder="홍길동" />
-              <EF label="발급일자 (숫자만)" value={editRes.issueDate || ""} onChange={(v) => setEditRes((p) => ({ ...p, issueDate: v.replace(/\D/g, "").slice(0, 8) }))} placeholder="20230627" type="number" />
-              <EF label="주민번호 앞자리 (숫자만)" value={editRes.numberFront || ""} onChange={(v) => setEditRes((p) => ({ ...p, numberFront: v.replace(/\D/g, "").slice(0, 6) }))} placeholder="070204" type="number" />
-              <EF label="주민번호 뒷자리 (숫자만)" value={editRes.numberBack || ""} onChange={(v) => setEditRes((p) => ({ ...p, numberBack: v.replace(/\D/g, "").slice(0, 7) }))} placeholder="3055215" type="number" />
-              <EF label="주소1 (지명)" value={editRes.addr1 || ""} onChange={(v) => setEditRes((p) => ({ ...p, addr1: v }))} placeholder="경기도 파주시" />
-              <EF label="주소2 (도로명)" value={editRes.addr2 || ""} onChange={(v) => setEditRes((p) => ({ ...p, addr2: v }))} placeholder="운정로 67-24" />
-              <EF label="주소3 (상세주소)" value={editRes.addr3 || ""} onChange={(v) => setEditRes((p) => ({ ...p, addr3: v }))} placeholder="7동4호" />
-              <EF label="인증자" value={editRes.issuer || ""} onChange={(v) => setEditRes((p) => ({ ...p, issuer: v }))} placeholder="경기 파주시장" />
+              <EF label="발급일자 (숫자만 8자리)" value={editRes.issueDate || ""} onChange={(v) => setEditRes((p) => ({ ...p, issueDate: v.replace(/\D/g, "").slice(0, 8) }))} placeholder="20230627" numeric />
+              <EF label="주민번호 앞자리 (6자리)" value={editRes.numberFront || ""} onChange={(v) => setEditRes((p) => ({ ...p, numberFront: v.replace(/\D/g, "").slice(0, 6) }))} placeholder="070204" numeric />
+              <EF label="주민번호 뒷자리 (7자리)" value={editRes.numberBack || ""} onChange={(v) => setEditRes((p) => ({ ...p, numberBack: v.replace(/\D/g, "").slice(0, 7) }))} placeholder="3055215" numeric />
+              <EF label="주소 (지명)" value={editRes.addr1 || ""} onChange={(v) => setEditRes((p) => ({ ...p, addr1: v }))} placeholder="경기도 파주시" />
+              <EF label="주소 (도로명)" value={editRes.addr2 || ""} onChange={(v) => setEditRes((p) => ({ ...p, addr2: v }))} placeholder="운정로 67-24" />
+              <EF label="주소 (상세)" value={editRes.addr3 || ""} onChange={(v) => setEditRes((p) => ({ ...p, addr3: v }))} placeholder="7동4호" />
+              <EF label="발급기관" value={editRes.issuer || ""} onChange={(v) => setEditRes((p) => ({ ...p, issuer: v }))} placeholder="경기 파주시장" />
             </>
           ) : (
             <>
               <EF label="이름" value={editDL.dlName || ""} onChange={(v) => setEditDL((p) => ({ ...p, dlName: v }))} placeholder="홍길동" />
               <EF label="면허번호" value={editDL.dlNumber || ""} onChange={(v) => setEditDL((p) => ({ ...p, dlNumber: v }))} placeholder="11-00-000000-00" />
               <EF label="면허종별" value={editDL.dlType || ""} onChange={(v) => setEditDL((p) => ({ ...p, dlType: v }))} placeholder="1종 보통" />
-              <EF label="주민번호 앞자리 (숫자만)" value={editDL.dlNumFront || ""} onChange={(v) => setEditDL((p) => ({ ...p, dlNumFront: v.replace(/\D/g, "").slice(0, 6) }))} placeholder="070204" type="number" />
-              <EF label="발급일자 (숫자만)" value={editDL.dlIssueDate || ""} onChange={(v) => setEditDL((p) => ({ ...p, dlIssueDate: v.replace(/\D/g, "").slice(0, 8) }))} placeholder="20230627" type="number" />
-              <EF label="갱신기간 만료 (숫자만)" value={editDL.dlExpiry || ""} onChange={(v) => setEditDL((p) => ({ ...p, dlExpiry: v.replace(/\D/g, "").slice(0, 8) }))} placeholder="20280315" type="number" />
-              <EF label="주소1 (지명)" value={editDL.dlAddr1 || ""} onChange={(v) => setEditDL((p) => ({ ...p, dlAddr1: v }))} placeholder="경기도 파주시" />
-              <EF label="주소2 (도로명)" value={editDL.dlAddr2 || ""} onChange={(v) => setEditDL((p) => ({ ...p, dlAddr2: v }))} placeholder="운정로 67-24" />
-              <EF label="인증자" value={editDL.dlIssuer || ""} onChange={(v) => setEditDL((p) => ({ ...p, dlIssuer: v }))} placeholder="경기남부경찰청장" />
+              <EF label="주민번호 앞자리 (6자리)" value={editDL.dlNumFront || ""} onChange={(v) => setEditDL((p) => ({ ...p, dlNumFront: v.replace(/\D/g, "").slice(0, 6) }))} placeholder="070204" numeric />
+              <EF label="발급일자 (8자리)" value={editDL.dlIssueDate || ""} onChange={(v) => setEditDL((p) => ({ ...p, dlIssueDate: v.replace(/\D/g, "").slice(0, 8) }))} placeholder="20230627" numeric />
+              <EF label="갱신만료일 (8자리)" value={editDL.dlExpiry || ""} onChange={(v) => setEditDL((p) => ({ ...p, dlExpiry: v.replace(/\D/g, "").slice(0, 8) }))} placeholder="20280315" numeric />
+              <EF label="주소 (지명)" value={editDL.dlAddr1 || ""} onChange={(v) => setEditDL((p) => ({ ...p, dlAddr1: v }))} placeholder="경기도 파주시" />
+              <EF label="주소 (도로명)" value={editDL.dlAddr2 || ""} onChange={(v) => setEditDL((p) => ({ ...p, dlAddr2: v }))} placeholder="운정로 67-24" />
+              <EF label="발급기관" value={editDL.dlIssuer || ""} onChange={(v) => setEditDL((p) => ({ ...p, dlIssuer: v }))} placeholder="경기남부경찰청장" />
             </>
           )}
-          <div className="mb-4">
-            <label className="block text-[12px] text-gray-500 font-medium mb-2">사진</label>
+
+          {/* 사진 업로드 */}
+          <div className="mt-2">
+            <label className="block text-[12px] text-gray-500 font-bold mb-2">증명사진</label>
             <div className="flex items-center gap-3">
               <button
                 onClick={() => fileRef.current?.click()}
-                className="h-10 px-5 border border-gray-400 rounded text-[13px] font-medium text-gray-700 bg-white"
+                className="h-11 px-5 border-2 border-gray-300 rounded-xl text-[14px] font-medium text-gray-700 bg-white active:bg-gray-50"
               >
-                파일 선택
+                📷 사진 선택
               </button>
               {pendingPhoto
-                ? <span className="text-[13px] text-gray-600">사진 선택됨 ✓</span>
+                ? <span className="text-[13px] text-green-600 font-bold">사진 선택됨 ✓</span>
                 : <span className="text-[13px] text-gray-400">선택된 파일 없음</span>
               }
             </div>
           </div>
-        </div>
-        <div className="flex gap-3 px-5 pb-8 pt-3 border-t border-gray-100 shrink-0">
-          <button
-            onClick={() => { setEditMode(false); setPendingPhoto(null); }}
-            className="flex-1 h-14 rounded-2xl border-2 border-gray-300 text-gray-700 font-bold text-[15px]"
-          >
-            닫기
-          </button>
-          <button
-            onClick={saveEdit}
-            className="flex-1 h-14 rounded-2xl bg-[#003764] text-white font-bold text-[15px]"
-          >
-            기기에 정보 저장
-          </button>
+
+          {/* 하단 저장 버튼 (스크롤 끝에도 보이도록) */}
+          <div className="mt-6 flex gap-3">
+            <button
+              onClick={() => { setEditMode(false); setPendingPhoto(null); }}
+              className="flex-1 h-14 rounded-2xl border-2 border-gray-200 text-gray-600 font-bold text-[15px] bg-white"
+            >
+              닫기
+            </button>
+            <button
+              onClick={saveEdit}
+              className="flex-1 h-14 rounded-2xl bg-[#003764] text-white font-bold text-[15px]"
+            >
+              저장하기
+            </button>
+          </div>
         </div>
       </div>
     );
