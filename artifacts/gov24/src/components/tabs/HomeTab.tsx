@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 // ── 데이터 ────────────────────────────────────────────────────
 
 const QUICK_SERVICES = [
+  { title: "모바일 신분증", href: "/mobile-id", iconBg: "#1B5EA4", iconType: "id" },
   { title: "토지(임야)대장", href: undefined, iconBg: "#E53935", iconType: "pdf" },
   { title: "주민등록등·초본", href: undefined, iconBg: "#E53935", iconType: "pdf" },
   { title: "자동차등록원부", href: undefined, iconBg: "#E53935", iconType: "pdf" },
@@ -65,6 +66,17 @@ const LIFE_ITEMS: Record<string, { text: string; sub: string }[]> = {
 
 // ── 서비스 아이콘 (PDF / 링크 / 편집 스타일) ──────────────────
 function ServiceIcon({ type, bg }: { type: string; bg: string }) {
+  if (type === "id") {
+    return (
+      <div className="w-8 h-8 rounded-md flex items-center justify-center shrink-0" style={{ background: bg }}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+          <rect x="2" y="5" width="20" height="14" rx="2" stroke="white" strokeWidth="1.8"/>
+          <circle cx="8" cy="12" r="2.5" fill="white"/>
+          <path d="M13 10h5M13 14h3" stroke="white" strokeWidth="1.5" strokeLinecap="round"/>
+        </svg>
+      </div>
+    );
+  }
   if (type === "pdf") {
     return (
       <div className="w-8 h-8 rounded-md flex items-center justify-center shrink-0" style={{ background: bg }}>
