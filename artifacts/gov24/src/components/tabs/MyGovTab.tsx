@@ -117,11 +117,28 @@ export default function MyGovTab() {
     if (role !== "user") loadSessions();
   }, [role]);
 
+  // ── 앱 로드 시 저장된 역할 자동 복구 ──────────────────────────
   useEffect(() => {
     const d = getUserData();
     if (d.name) { setUser(d); setLoggedIn(true); }
     loadConfig();
     loadNotice();
+
+    const storedPw = localStorage.getItem("gov24_role_pw");
+    if (storedPw) {
+      fetch("/api/gate/auth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: storedPw, sessionId }),
+      })
+        .then((r) => r.json())
+        .then((d) => {
+          if (d.role === "developer") { setRole("developer"); loadConfig(); loadSessions(); }
+          else if (d.role === "admin") { setRole("admin"); loadConfig(); loadSessions(); }
+          else { localStorage.removeItem("gov24_role_pw"); }
+        })
+        .catch(() => {});
+    }
   }, []);
 
   useEffect(() => {
@@ -141,9 +158,19 @@ export default function MyGovTab() {
         body: JSON.stringify({ password: pwInput, sessionId }),
       });
       const d = await res.json();
-      if (d.role === "developer") { setRole("developer"); showToast("개발자 인증 완료"); await loadConfig(); await loadSessions(); }
-      else if (d.role === "admin") { setRole("admin"); showToast("관리자 인증 완료"); await loadConfig(); await loadSessions(); }
-      else showToast("비밀번호가 올바르지 않습니다");
+      if (d.role === "developer") {
+        setRole("developer");
+        localStorage.setItem("gov24_role_pw", pwInput);
+        showToast("개발자 인증 완료");
+        await loadConfig(); await loadSessions();
+      } else if (d.role === "admin") {
+        setRole("admin");
+        localStorage.setItem("gov24_role_pw", pwInput);
+        showToast("관리자 인증 완료");
+        await loadConfig(); await loadSessions();
+      } else {
+        showToast("비밀번호가 올바르지 않습니다");
+      }
     } catch { showToast("서버 오류"); }
     finally { setAuthLoading(false); setPwInput(""); }
   }
@@ -399,7 +426,7 @@ export default function MyGovTab() {
                 </span>
               </div>
             </div>
-            <button onClick={() => { setLoggedIn(false); setRole("user"); }} className="text-gray-300">
+            <button onClick={() => { setLoggedIn(false); setRole("user"); localStorage.removeItem("gov24_role_pw"); }} className="text-gray-300">
               <X className="w-5 h-5" />
             </button>
           </div>
