@@ -1,8 +1,113 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useLocation } from "wouter";
 import { ChevronLeft, Menu, X } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { QRCodeSVG } from "qrcode.react";
+
+// ── WebAuthn helpers ────────────────────────────────────────────────────────
+
+const BIO_KEY = "gov24_bio_cred_id";
+
+function b64encode(buf: ArrayBuffer) {
+  return btoa(String.fromCharCode(...new Uint8Array(buf)));
+}
+function b64decode(s: string): Uint8Array {
+  return Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
+}
+function randomChallenge() {
+  const c = new Uint8Array(32);
+  crypto.getRandomValues(c);
+  return c;
+}
+
+async function bioIsAvailable(): Promise<boolean> {
+  try {
+    if (typeof window.PublicKeyCredential === "undefined") return false;
+    return await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+  } catch { return false; }
+}
+
+async function bioRegister(): Promise<string> {
+  const cred = await navigator.credentials.create({
+    publicKey: {
+      challenge: randomChallenge(),
+      rp: { name: "정부24", id: window.location.hostname },
+      user: {
+        id: new TextEncoder().encode("gov24-mobile-id"),
+        name: "gov24",
+        displayName: "정부24 사용자",
+      },
+      pubKeyCredParams: [
+        { type: "public-key", alg: -7 },
+        { type: "public-key", alg: -257 },
+      ],
+      authenticatorSelection: {
+        authenticatorAttachment: "platform",
+        userVerification: "required",
+        residentKey: "preferred",
+      },
+      timeout: 60000,
+    },
+  }) as PublicKeyCredential | null;
+  if (!cred) throw new Error("등록 취소됨");
+  return b64encode(cred.rawId);
+}
+
+async function bioAuthenticate(credId: string): Promise<void> {
+  const result = await navigator.credentials.get({
+    publicKey: {
+      challenge: randomChallenge(),
+      allowCredentials: [{ type: "public-key", id: b64decode(credId) }],
+      userVerification: "required",
+      timeout: 60000,
+    },
+  });
+  if (!result) throw new Error("인증 취소됨");
+}
+
+// ── Fingerprint SVG icon ────────────────────────────────────────────────────
+function FingerprintIcon({ size = 56, color = "#003764", animated = false }: { size?: number; color?: string; animated?: boolean }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <motion.path
+        animate={animated ? { pathLength: [0, 1], opacity: [0.4, 1] } : {}}
+        transition={{ duration: 1.2, ease: "easeInOut", repeat: animated ? Infinity : 0, repeatType: "reverse" }}
+        d="M17.81 4.47c-.08 0-.16-.02-.23-.06C15.66 3.42 14 3 12.01 3c-1.98 0-3.86.47-5.57 1.41-.24.13-.54.04-.68-.2-.13-.24-.04-.55.2-.68C7.82 2.52 9.86 2 12.01 2c2.13 0 3.99.47 6.03 1.52.25.13.34.43.21.67-.09.18-.26.28-.44.28z"
+        fill={color}
+      />
+      <motion.path
+        animate={animated ? { pathLength: [0, 1], opacity: [0.3, 1] } : {}}
+        transition={{ duration: 1.2, ease: "easeInOut", delay: 0.1, repeat: animated ? Infinity : 0, repeatType: "reverse" }}
+        d="M3.5 9.72c-.1 0-.2-.03-.29-.09-.23-.16-.28-.47-.12-.7.99-1.4 2.25-2.5 3.75-3.27C9.98 4.04 14 4.03 17.15 6.07c1.5.76 2.76 1.86 3.75 3.27.16.23.11.54-.12.7-.23.16-.54.11-.7-.12-.9-1.27-2.05-2.28-3.43-2.99-2.87-1.83-6.61-1.83-9.48 0-1.38.71-2.53 1.72-3.43 2.99-.09.14-.25.2-.4.2z"
+        fill={color}
+      />
+      <motion.path
+        animate={animated ? { pathLength: [0, 1], opacity: [0.3, 1] } : {}}
+        transition={{ duration: 1.2, ease: "easeInOut", delay: 0.2, repeat: animated ? Infinity : 0, repeatType: "reverse" }}
+        d="M7.3 19.5c-.1 0-.2-.03-.28-.08-.22-.15-.27-.46-.12-.68 1.23-1.75 1.88-3.83 1.88-6.01 0-1.82-.49-3.53-1.42-5.07-.14-.23-.06-.54.17-.68.23-.14.54-.06.68.17 1.03 1.7 1.57 3.6 1.57 5.58 0 2.37-.71 4.63-2.06 6.55-.1.13-.25.22-.42.22z"
+        fill={color}
+      />
+      <motion.path
+        animate={animated ? { pathLength: [0, 1], opacity: [0.3, 1] } : {}}
+        transition={{ duration: 1.2, ease: "easeInOut", delay: 0.3, repeat: animated ? Infinity : 0, repeatType: "reverse" }}
+        d="M12.01 22c-.18 0-.34-.1-.43-.26-.45-.82-.68-1.68-.68-2.56 0-2.83.97-5.41 2.73-7.28.19-.2.5-.21.7-.02.2.19.21.5.02.7-1.6 1.7-2.45 4.05-2.45 6.6 0 .72.2 1.43.59 2.1.14.24.06.55-.18.69-.08.02-.17.03-.3.03z"
+        fill={color}
+      />
+      <motion.path
+        animate={animated ? { pathLength: [0, 1], opacity: [0.3, 1] } : {}}
+        transition={{ duration: 1.2, ease: "easeInOut", delay: 0.15, repeat: animated ? Infinity : 0, repeatType: "reverse" }}
+        d="M16.71 19.71c-.06 0-.12-.01-.18-.04-.26-.1-.38-.39-.28-.65.33-.86.49-1.77.49-2.71 0-2.07-.64-4.04-1.87-5.72-.15-.22-.1-.53.12-.68.22-.15.53-.1.68.12 1.37 1.87 2.07 4.06 2.07 6.28 0 1.03-.18 2.04-.55 3-.08.19-.26.4-.48.4z"
+        fill={color}
+      />
+      <motion.path
+        animate={animated ? { pathLength: [0, 1], opacity: [0.3, 1] } : {}}
+        transition={{ duration: 1.2, ease: "easeInOut", delay: 0.25, repeat: animated ? Infinity : 0, repeatType: "reverse" }}
+        d="M12 10c-1.1 0-2 .9-2 2 0 1.81-.28 3.6-.83 5.33-.09.27.06.57.34.66.27.09.57-.06.66-.34C10.72 15.84 11 13.94 11 12c0-.55.45-1 1-1s1 .45 1 1c0 2.97-.55 5.84-1.63 8.54-.1.27.04.57.31.67.06.02.12.03.18.03.21 0 .41-.13.49-.33C13.46 18.12 14 15.11 14 12c0-1.1-.9-2-2-2z"
+        fill={color}
+      />
+    </svg>
+  );
+}
 
 const PIN_COUNT = 30;
 
@@ -129,8 +234,9 @@ function DarkToggle({ on, onToggle }: { on: boolean; onToggle: () => void }) {
   );
 }
 
-type Screen = "pin" | "auth" | "id";
+type Screen = "pin" | "auth" | "bio-auth" | "bio-register" | "id";
 type IdTab = "주민등록증" | "운전면허증";
+type BioState = "idle" | "scanning" | "success" | "error";
 
 export default function MobileIdPage() {
   const [, navigate] = useLocation();
@@ -146,6 +252,12 @@ export default function MobileIdPage() {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
+  // ── Biometric state ─────────────────────────────────────────
+  const [bioAvailable, setBioAvailable] = useState(false);
+  const [bioRegistered, setBioRegistered] = useState(false);
+  const [bioState, setBioState] = useState<BioState>("idle");
+  const [bioError, setBioError] = useState("");
+
   const [res, setRes] = useState(getResidentData);
   const [dl, setDL] = useState(getDLData);
   const [editRes, setEditRes] = useState({ ...getResidentData() });
@@ -153,6 +265,49 @@ export default function MobileIdPage() {
   const [pendingPhoto, setPendingPhoto] = useState<string | null>(null);
 
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(""), 3000); };
+
+  // ── Biometric init ───────────────────────────────────────────
+  useEffect(() => {
+    bioIsAvailable().then((ok) => {
+      setBioAvailable(ok);
+      if (ok) setBioRegistered(!!localStorage.getItem(BIO_KEY));
+    });
+  }, []);
+
+  const handleBiometric = useCallback(async () => {
+    setBioError("");
+    const stored = localStorage.getItem(BIO_KEY);
+
+    if (!stored) {
+      // 최초 등록
+      setScreen("bio-register");
+      setBioState("scanning");
+      try {
+        const credId = await bioRegister();
+        localStorage.setItem(BIO_KEY, credId);
+        setBioRegistered(true);
+        setBioState("success");
+        setTimeout(() => { setScreen("auth"); setTimeout(() => setScreen("id"), 900); }, 700);
+      } catch (e: unknown) {
+        setBioState("error");
+        setBioError(e instanceof Error && e.message.includes("취소") ? "등록이 취소되었습니다" : "생체인증 등록 실패");
+        setTimeout(() => { setScreen("pin"); setBioState("idle"); }, 2000);
+      }
+    } else {
+      // 인증
+      setScreen("bio-auth");
+      setBioState("scanning");
+      try {
+        await bioAuthenticate(stored);
+        setBioState("success");
+        setTimeout(() => { setScreen("auth"); setTimeout(() => setScreen("id"), 900); }, 600);
+      } catch (e: unknown) {
+        setBioState("error");
+        setBioError(e instanceof Error && e.message.includes("취소") ? "인증이 취소되었습니다" : "생체인증 실패 — PIN을 사용하세요");
+        setTimeout(() => { setScreen("pin"); setBioState("idle"); }, 2000);
+      }
+    }
+  }, []);
 
   useEffect(() => {
     if (screen === "pin") {
@@ -236,13 +391,34 @@ export default function MobileIdPage() {
           <div className="w-9" />
         </div>
         <div className="flex-1 flex flex-col">
-          <div className="flex-1 flex flex-col items-center justify-center gap-6 px-8">
+          <div className="flex-1 flex flex-col items-center justify-center gap-5 px-8">
+
+            {/* 잠금 아이콘 */}
+            <div className="w-16 h-16 bg-[#003764]/8 rounded-full flex items-center justify-center">
+              <svg width="30" height="30" viewBox="0 0 24 24" fill="none">
+                <rect x="5" y="11" width="14" height="10" rx="2" fill="#003764"/>
+                <path d="M8 11V7a4 4 0 018 0v4" stroke="#003764" strokeWidth="2" strokeLinecap="round"/>
+                <circle cx="12" cy="16" r="1.5" fill="white"/>
+              </svg>
+            </div>
+
             <p className="text-[15px] font-semibold text-gray-700">PIN 번호를 입력하세요</p>
+
+            {/* PIN 점 */}
             <div className="flex gap-4">
               {Array.from({ length: 6 }).map((_, i) => (
-                <div key={i} className={`w-3 h-3 rounded-full border-2 transition-all ${i < pin.length ? "bg-[#003764] border-[#003764] scale-110" : "border-gray-300"}`} />
+                <motion.div
+                  key={i}
+                  animate={i < pin.length ? { scale: [1, 1.3, 1] } : {}}
+                  transition={{ duration: 0.15 }}
+                  className={`w-3 h-3 rounded-full border-2 transition-colors duration-150 ${
+                    i < pin.length ? "bg-[#003764] border-[#003764]" : "border-gray-300"
+                  }`}
+                />
               ))}
             </div>
+
+            {/* 타이머 */}
             <div className="w-full max-w-[260px]">
               <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
                 <div
@@ -260,7 +436,26 @@ export default function MobileIdPage() {
                 </span>
               </p>
             </div>
+
+            {/* 생체인증 버튼 */}
+            {bioAvailable && (
+              <motion.button
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3 }}
+                onClick={handleBiometric}
+                className="flex flex-col items-center gap-1.5 px-6 py-3 rounded-2xl active:scale-95 transition-transform"
+                style={{ background: "rgba(0,55,100,0.06)" }}
+              >
+                <FingerprintIcon size={40} color="#003764" />
+                <span className="text-[11px] font-bold text-[#003764]">
+                  {bioRegistered ? "생체인증으로 열기" : "생체인증 등록"}
+                </span>
+              </motion.button>
+            )}
           </div>
+
+          {/* 숫자 패드 */}
           <div className="grid grid-cols-3 border-t border-gray-100">
             {nums.map((n, i) => (
               <button
@@ -277,11 +472,151 @@ export default function MobileIdPage() {
     );
   }
 
+  // ── BIOMETRIC AUTH / REGISTER SCREEN ───────────────────────
+  if (screen === "bio-auth" || screen === "bio-register") {
+    const isRegister = screen === "bio-register";
+    const stateConfig = {
+      scanning: {
+        color: "#003764",
+        ringColor: "border-[#003764]/30",
+        ringActive: "border-t-[#003764]",
+        msg: isRegister ? "생체정보를 등록합니다…" : "생체인증 중…",
+        sub: isRegister ? "Face ID 또는 지문을 인식해 주세요" : "기기에 등록된 얼굴 또는 지문을 인식하세요",
+      },
+      success: {
+        color: "#16a34a",
+        ringColor: "border-green-200",
+        ringActive: "border-t-green-500",
+        msg: isRegister ? "등록 완료!" : "인증 성공!",
+        sub: isRegister ? "이제 생체인증으로 신분증을 열 수 있습니다" : "신분증을 열겠습니다",
+      },
+      error: {
+        color: "#dc2626",
+        ringColor: "border-red-200",
+        ringActive: "border-t-red-500",
+        msg: "인증 실패",
+        sub: bioError,
+      },
+      idle: {
+        color: "#003764",
+        ringColor: "border-[#003764]/30",
+        ringActive: "border-t-[#003764]",
+        msg: "",
+        sub: "",
+      },
+    }[bioState];
+
+    return (
+      <div className="fixed inset-0 flex flex-col items-center justify-center bg-white gap-8 px-8" style={{ zIndex: 100 }}>
+        {/* 외부 회전 링 + 지문 아이콘 */}
+        <div className="relative flex items-center justify-center">
+          {bioState === "scanning" && (
+            <motion.div
+              animate={{ rotate: 360 }}
+              transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
+              className={`absolute w-28 h-28 rounded-full border-4 ${stateConfig.ringColor} ${stateConfig.ringActive}`}
+            />
+          )}
+          {bioState === "success" && (
+            <motion.div
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              className="absolute w-28 h-28 rounded-full border-4 border-green-400"
+            />
+          )}
+          {bioState === "error" && (
+            <motion.div
+              animate={{ x: [-6, 6, -6, 6, 0] }}
+              transition={{ duration: 0.4 }}
+              className="absolute w-28 h-28 rounded-full border-4 border-red-300"
+            />
+          )}
+
+          <motion.div
+            animate={
+              bioState === "scanning"
+                ? { scale: [1, 1.06, 1], opacity: [0.8, 1, 0.8] }
+                : bioState === "success"
+                ? { scale: [1, 1.15, 1] }
+                : {}
+            }
+            transition={{ duration: 1.2, repeat: bioState === "scanning" ? Infinity : 0 }}
+            className="w-20 h-20 rounded-full flex items-center justify-center"
+            style={{ background: `${stateConfig.color}12` }}
+          >
+            {bioState === "success" ? (
+              <motion.svg
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ type: "spring", stiffness: 400, damping: 20 }}
+                width="44" height="44" viewBox="0 0 24 24" fill="none"
+              >
+                <motion.path
+                  initial={{ pathLength: 0 }}
+                  animate={{ pathLength: 1 }}
+                  transition={{ duration: 0.5, ease: "easeOut" }}
+                  d="M5 13l4 4L19 7"
+                  stroke="#16a34a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+                />
+              </motion.svg>
+            ) : bioState === "error" ? (
+              <svg width="44" height="44" viewBox="0 0 24 24" fill="none">
+                <path d="M18 6L6 18M6 6l12 12" stroke="#dc2626" strokeWidth="2.5" strokeLinecap="round"/>
+              </svg>
+            ) : (
+              <FingerprintIcon size={44} color={stateConfig.color} animated={bioState === "scanning"} />
+            )}
+          </motion.div>
+        </div>
+
+        {/* 텍스트 */}
+        <div className="text-center">
+          <motion.p
+            key={stateConfig.msg}
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="text-[18px] font-black text-gray-900"
+            style={{ color: stateConfig.color }}
+          >
+            {stateConfig.msg}
+          </motion.p>
+          <motion.p
+            key={stateConfig.sub}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.1 }}
+            className="text-[13px] text-gray-500 mt-1.5 leading-relaxed"
+          >
+            {stateConfig.sub}
+          </motion.p>
+        </div>
+
+        {/* PIN으로 전환 (스캔 중일 때만) */}
+        {bioState === "scanning" && (
+          <button
+            onClick={() => { setScreen("pin"); setBioState("idle"); }}
+            className="text-[12px] text-gray-400 underline mt-2"
+          >
+            PIN 번호로 입력
+          </button>
+        )}
+      </div>
+    );
+  }
+
   // ── AUTH LOADING ────────────────────────────────────────────
   if (screen === "auth") {
     return (
-      <div className="fixed inset-0 flex flex-col items-center justify-center bg-white" style={{ zIndex: 100 }}>
-        <div className="w-16 h-16 border-4 border-[#003764]/20 border-t-[#003764] rounded-full animate-spin mb-4" />
+      <div className="fixed inset-0 flex flex-col items-center justify-center bg-white gap-4" style={{ zIndex: 100 }}>
+        <div className="relative">
+          <div className="w-16 h-16 border-4 border-[#003764]/20 border-t-[#003764] rounded-full animate-spin" />
+          <div className="absolute inset-0 flex items-center justify-center">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+              <rect x="5" y="11" width="14" height="10" rx="2" fill="#003764"/>
+              <path d="M8 11V7a4 4 0 018 0v4" stroke="#003764" strokeWidth="2" strokeLinecap="round"/>
+            </svg>
+          </div>
+        </div>
         <p className="text-[14px] text-gray-500 font-medium">인증 중...</p>
       </div>
     );
