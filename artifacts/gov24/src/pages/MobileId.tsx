@@ -111,20 +111,116 @@ function FingerprintIcon({ size = 56, color = "#003764", animated = false }: { s
 
 const PIN_COUNT = 30;
 
+// ── 랜덤 기본값 생성기 ───────────────────────────────────────────
+
+const NAMES = ["김민수", "이지은", "박준호", "최서연", "정우진", "강다연", "송현우", "윤소희", "임재혁", "한가을", "오지현", "신영식", "정미지", "로준석", "홍길동", "신길숙", "안정원", "남순철", "두승호", "김정은", "백지환", "최영수", "유지훈", "한미숙", "오승철", "신은비", "김소연", "정지원", "안수빈", "박지원"];
+const CITIES = ["서울", "부산", "대구", "인천", "광주", "대전", "울산", "수원", "성남", "고양", "부천", "안양", "안산", "용인", "화성", "춠처시", "원주", "청주시", "천안시", "전주시", "목포시", "포항시", "창원시", "제주시", "세종시", "의정부", "시흥시", "파주시", "김포시", "광명시"];
+const GUS = ["강남", "서초", "송파", "마포", "영등포", "동작", "관악", "강서", "양천", "구로", "금천", "노원", "도봉", "강북", "성북", "중랹", "동대문", "광진", "성동", "용산", "종로", "중구", "은평", "서대문", "사상", "영도", "백월", "담양", "근허", "잠실"];
+const ROADS = ["테헤란로", "강남대로", "서초대로", "마포대로", "영등포로", "올림픽대로", "백제고분로", "양재대로", "남부순환로", "백부춤화로", "병탄대로", "산성대로", "월갑북로", "용산로", "최종로", "잠실로", "담양로", "근허로", "남대문로", "대로"];
+const DETAILS = ["101동 1201호", "202동 305호", "3층", "4호", "7동 1203호", "A동 501호", "B동 802호", "1101호", "203호", "502호", "301호", "102호", "603호", "1502호", "701호", "12동 304호", "3동 1002호", "8동 601호", "902호", "401호"];
+const DL_TYPES = ["1종 보통", "2종 보통", "1종 대형", "2종 소형", "1종 특수", "2종 월통"];
+const RRN_GENDER_START = ["1", "2", "3", "4", "5", "6", "7", "8", "9"];
+
+function rand<T>(arr: T[]): T { return arr[Math.floor(Math.random() * arr.length)]; }
+function randInt(min: number, max: number) { return Math.floor(Math.random() * (max - min + 1)) + min; }
+function pad2(n: number) { return String(n).padStart(2, "0"); }
+function pad4(n: number) { return String(n).padStart(4, "0"); }
+
+function generateRandomResident() {
+  const name = rand(NAMES);
+  const year = randInt(1990, 2005);
+  const month = randInt(1, 12);
+  const day = randInt(1, 28);
+  const numberFront = pad2(year % 100) + pad2(month) + pad2(day);
+  const numberBack = rand(RRN_GENDER_START) + String(randInt(100000, 999999));
+  const city = rand(CITIES);
+  const gu = rand(GUS);
+  const road = rand(ROADS);
+  const roadNum = randInt(1, 200);
+  const issueDate = String(randInt(2021, 2024)) + pad2(randInt(1, 12)) + pad2(randInt(1, 28));
+  const issuer = rand([
+    `${city} ${gu}구청`, `${city} ${gu}구청`, `${city} ${gu}구청`,
+    `${city} ${gu}경찰서`, `${city} ${gu}경찰서`, `${city}시청`,
+  ]);
+  const addr1 = city;
+  const addr2 = `${gu}${road} ${roadNum}`;
+  const addr3 = rand(DETAILS);
+  return {
+    name,
+    issueDate,
+    numberFront,
+    numberBack,
+    addr1,
+    addr2,
+    addr3,
+    issuer,
+    photo: "",
+  };
+}
+
+function generateRandomDL() {
+  const name = rand(NAMES);
+  const dlNum = `${randInt(11, 28)}-${pad2(randInt(0, 23))}-${pad4(randInt(0, 9999))}-${pad2(randInt(0, 99))}`;
+  const type = rand(DL_TYPES);
+  const year = randInt(1990, 2005);
+  const month = randInt(1, 12);
+  const day = randInt(1, 28);
+  const numFront = pad2(year % 100) + pad2(month) + pad2(day);
+  const issueYear = randInt(2021, 2024);
+  const issueDate = String(issueYear) + pad2(randInt(1, 12)) + pad2(randInt(1, 28));
+  const expiry = String(issueYear + 10) + pad2(randInt(1, 12)) + pad2(randInt(1, 28));
+  const city = rand(CITIES);
+  const gu = rand(GUS);
+  const road = rand(ROADS);
+  const roadNum = randInt(1, 200);
+  const issuer = rand([`${city} ${gu}경찰서`, `${city} ${gu}경찰서`, `${city} 경찰서`]);
+  const addr1 = city;
+  const addr2 = `${gu}${road} ${roadNum}`;
+  return {
+    dlName: name,
+    dlNumber: dlNum,
+    dlType: type,
+    dlNumFront: numFront,
+    dlIssueDate: issueDate,
+    dlExpiry: expiry,
+    dlAddr1: addr1,
+    dlAddr2: addr2,
+    dlIssuer: issuer,
+    photo: "",
+  };
+}
+
 function getResidentData() {
   try {
     const d = localStorage.getItem("gov24_user");
-    const photo = localStorage.getItem("gov24_user_photo") ?? "";
-    return { ...(d ? JSON.parse(d) : {}), photo };
-  } catch { return { photo: "" }; }
+    if (d) {
+      const parsed = JSON.parse(d);
+      const photo = localStorage.getItem("gov24_user_photo") ?? "";
+      return { ...parsed, photo };
+    }
+    // 저장된 데이터 없음 → 랜덤 기본값 생성 & 저장
+    const defaults = generateRandomResident();
+    localStorage.setItem("gov24_user", JSON.stringify(defaults));
+    return defaults;
+  } catch {
+    return generateRandomResident();
+  }
 }
 
 function getDLData() {
   try {
     const d = localStorage.getItem("gov24_dl");
-    const photo = localStorage.getItem("gov24_dl_photo") ?? "";
-    return { ...(d ? JSON.parse(d) : {}), photo };
-  } catch { return { photo: "" }; }
+    if (d) {
+      const parsed = JSON.parse(d);
+      const photo = localStorage.getItem("gov24_dl_photo") ?? "";
+      return { ...parsed, photo };
+    }
+    const defaults = generateRandomDL();
+    localStorage.setItem("gov24_dl", JSON.stringify(defaults));
+    return defaults;
+  } catch {
+    return generateRandomDL();
+  }
 }
 
 function saveResidentData(data: Record<string, string>) {
