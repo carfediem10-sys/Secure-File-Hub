@@ -637,7 +637,7 @@ export default function MobileIdPage() {
           <label className="block text-[12px] text-gray-500 font-bold mb-1.5">{label}</label>
           <input
             type="text"
-            inputMode={numeric ? "numeric" : "text"}
+            pattern={numeric ? "[0-9]*" : undefined}
             value={value}
             onChange={(e) => onChange(e.target.value)}
             placeholder={placeholder}
