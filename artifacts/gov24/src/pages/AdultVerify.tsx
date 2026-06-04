@@ -15,7 +15,8 @@ export default function AdultVerifyPage() {
     try {
       const decoded = JSON.parse(decodeURIComponent(escape(atob(raw.replace(/-/g, "+").replace(/_/g, "/")))));
       name = decoded.n ?? name;
-      birth = decoded.b ?? birth;
+      // QR payload: birth 필드 생성 (numberFront = YYMMDD)
+      birth = decoded.birth ?? decoded.b ?? birth;
       type = decoded.t ?? type;
     } catch {}
   }

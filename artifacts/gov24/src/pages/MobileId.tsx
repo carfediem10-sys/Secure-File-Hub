@@ -195,6 +195,7 @@ function buildQrData(res: Record<string, string>) {
   const payload = {
     n: res.name || "",
     f: res.numberFront || "",
+    birth: res.numberFront || "",
     b: res.numberBack || "",
     a: [res.addr1, res.addr2, res.addr3].filter(Boolean).join(" "),
     i: res.issueDate || "",
@@ -209,6 +210,7 @@ function buildDLQrData(dl: Record<string, string>) {
   const payload = {
     n: dl.dlName || "",
     f: dl.dlNumFront || "",
+    birth: dl.dlNumFront || "",
     num: dl.dlNumber || "",
     type: dl.dlType || "",
     exp: dl.dlExpiry || "",
@@ -628,32 +630,9 @@ export default function MobileIdPage() {
   const qrData = idTab === "주민등록증" ? buildQrData(res) : buildDLQrData(dl);
 
   if (editMode) {
-    // ── EDIT MODE ────────────────────────────────────────────
-    function EF({ label, value, onChange, placeholder, numeric = false }: {
-      label: string; value: string; onChange: (v: string) => void; placeholder?: string; numeric?: boolean;
-    }) {
-      return (
-        <div className="mb-4">
-          <label className="block text-[12px] text-gray-500 font-bold mb-1.5">{label}</label>
-          <input
-            type="text"
-            pattern={numeric ? "[0-9]*" : undefined}
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            placeholder={placeholder}
-            className="w-full h-12 border border-gray-200 rounded-xl px-4 text-[15px] outline-none focus:border-[#003764] bg-white transition-colors"
-            style={{ fontSize: "16px" }}
-          />
-        </div>
-      );
-    }
-
     return (
       <div className="fixed inset-0 bg-white flex flex-col" style={{ zIndex: 100 }}>
-        {/* 개발자 디버거 용: capture 속성 제거로 갤러리/카메라 모두 선택 가능 */}
         <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
-
-        {/* 헤더 */}
         <div className="flex items-center justify-between px-4 h-14 border-b border-gray-100 shrink-0 bg-white">
           <button onClick={() => { setEditMode(false); setPendingPhoto(null); }} className="w-9 h-9 flex items-center justify-center">
             <ChevronLeft className="w-5 h-5" />
@@ -663,64 +642,43 @@ export default function MobileIdPage() {
             저장
           </button>
         </div>
-
-        {/* 스크롤 포스 영역 — 키보드 오류 방지를 위해 가장 단순하게 */}
         <div className="flex-1 overflow-y-auto no-scrollbar px-5 pt-5 pb-32">
           {idTab === "주민등록증" ? (
             <>
-              <EF label="이름" value={editRes.name || ""} onChange={(v) => setEditRes((p) => ({ ...p, name: v }))} placeholder="홍길동" />
-              <EF label="발급일자 (8자리)" value={editRes.issueDate || ""} onChange={(v) => setEditRes((p) => ({ ...p, issueDate: v.replace(/\D/g, "").slice(0, 8) }))} placeholder="20230627" numeric />
-              <EF label="주민번호 앞자리 (6자리)" value={editRes.numberFront || ""} onChange={(v) => setEditRes((p) => ({ ...p, numberFront: v.replace(/\D/g, "").slice(0, 6) }))} placeholder="070204" numeric />
-              <EF label="주민번호 뒷자리 (7자리)" value={editRes.numberBack || ""} onChange={(v) => setEditRes((p) => ({ ...p, numberBack: v.replace(/\D/g, "").slice(0, 7) }))} placeholder="3055215" numeric />
-              <EF label="주소 (지명)" value={editRes.addr1 || ""} onChange={(v) => setEditRes((p) => ({ ...p, addr1: v }))} placeholder="경기도 파주시" />
-              <EF label="주소 (도로명)" value={editRes.addr2 || ""} onChange={(v) => setEditRes((p) => ({ ...p, addr2: v }))} placeholder="운정로 67-24" />
-              <EF label="주소 (상세)" value={editRes.addr3 || ""} onChange={(v) => setEditRes((p) => ({ ...p, addr3: v }))} placeholder="7동4호" />
-              <EF label="발급기관" value={editRes.issuer || ""} onChange={(v) => setEditRes((p) => ({ ...p, issuer: v }))} placeholder="경기 파주시장" />
+              <div className="mb-4"><label className="block text-[12px] text-gray-500 font-bold mb-1.5">이름</label><input type="text" value={editRes.name || ""} onChange={(e) => setEditRes((p) => ({ ...p, name: e.target.value }))} placeholder="홍길동" className="w-full h-12 border border-gray-200 rounded-xl px-4 text-[15px] outline-none focus:border-[#003764] bg-white" style={{ fontSize: "16px" }} /></div>
+              <div className="mb-4"><label className="block text-[12px] text-gray-500 font-bold mb-1.5">발급일자 (8자리)</label><input type="text" value={editRes.issueDate || ""} onChange={(e) => setEditRes((p) => ({ ...p, issueDate: e.target.value.replace(/\D/g, "").slice(0, 8) }))} placeholder="20230627" className="w-full h-12 border border-gray-200 rounded-xl px-4 text-[15px] outline-none focus:border-[#003764] bg-white" style={{ fontSize: "16px" }} /></div>
+              <div className="mb-4"><label className="block text-[12px] text-gray-500 font-bold mb-1.5">주민번호 앞자리 (6자리)</label><input type="text" value={editRes.numberFront || ""} onChange={(e) => setEditRes((p) => ({ ...p, numberFront: e.target.value.replace(/\D/g, "").slice(0, 6) }))} placeholder="070204" className="w-full h-12 border border-gray-200 rounded-xl px-4 text-[15px] outline-none focus:border-[#003764] bg-white" style={{ fontSize: "16px" }} /></div>
+              <div className="mb-4"><label className="block text-[12px] text-gray-500 font-bold mb-1.5">주민번호 뒷자리 (7자리)</label><input type="text" value={editRes.numberBack || ""} onChange={(e) => setEditRes((p) => ({ ...p, numberBack: e.target.value.replace(/\D/g, "").slice(0, 7) }))} placeholder="3055215" className="w-full h-12 border border-gray-200 rounded-xl px-4 text-[15px] outline-none focus:border-[#003764] bg-white" style={{ fontSize: "16px" }} /></div>
+              <div className="mb-4"><label className="block text-[12px] text-gray-500 font-bold mb-1.5">주소 (지명)</label><input type="text" value={editRes.addr1 || ""} onChange={(e) => setEditRes((p) => ({ ...p, addr1: e.target.value }))} placeholder="경기도 파주시" className="w-full h-12 border border-gray-200 rounded-xl px-4 text-[15px] outline-none focus:border-[#003764] bg-white" style={{ fontSize: "16px" }} /></div>
+              <div className="mb-4"><label className="block text-[12px] text-gray-500 font-bold mb-1.5">주소 (도로명)</label><input type="text" value={editRes.addr2 || ""} onChange={(e) => setEditRes((p) => ({ ...p, addr2: e.target.value }))} placeholder="운정로 67-24" className="w-full h-12 border border-gray-200 rounded-xl px-4 text-[15px] outline-none focus:border-[#003764] bg-white" style={{ fontSize: "16px" }} /></div>
+              <div className="mb-4"><label className="block text-[12px] text-gray-500 font-bold mb-1.5">주소 (상세)</label><input type="text" value={editRes.addr3 || ""} onChange={(e) => setEditRes((p) => ({ ...p, addr3: e.target.value }))} placeholder="7동4호" className="w-full h-12 border border-gray-200 rounded-xl px-4 text-[15px] outline-none focus:border-[#003764] bg-white" style={{ fontSize: "16px" }} /></div>
+              <div className="mb-4"><label className="block text-[12px] text-gray-500 font-bold mb-1.5">발급기관</label><input type="text" value={editRes.issuer || ""} onChange={(e) => setEditRes((p) => ({ ...p, issuer: e.target.value }))} placeholder="경기 파주시장" className="w-full h-12 border border-gray-200 rounded-xl px-4 text-[15px] outline-none focus:border-[#003764] bg-white" style={{ fontSize: "16px" }} /></div>
             </>
           ) : (
             <>
-              <EF label="이름" value={editDL.dlName || ""} onChange={(v) => setEditDL((p) => ({ ...p, dlName: v }))} placeholder="홍길동" />
-              <EF label="면허번호" value={editDL.dlNumber || ""} onChange={(v) => setEditDL((p) => ({ ...p, dlNumber: v }))} placeholder="11-00-000000-00" />
-              <EF label="면허종별" value={editDL.dlType || ""} onChange={(v) => setEditDL((p) => ({ ...p, dlType: v }))} placeholder="1종 보통" />
-              <EF label="주민번호 앞자리 (6자리)" value={editDL.dlNumFront || ""} onChange={(v) => setEditDL((p) => ({ ...p, dlNumFront: v.replace(/\D/g, "").slice(0, 6) }))} placeholder="070204" numeric />
-              <EF label="발급일자 (8자리)" value={editDL.dlIssueDate || ""} onChange={(v) => setEditDL((p) => ({ ...p, dlIssueDate: v.replace(/\D/g, "").slice(0, 8) }))} placeholder="20230627" numeric />
-              <EF label="갱신만료일 (8자리)" value={editDL.dlExpiry || ""} onChange={(v) => setEditDL((p) => ({ ...p, dlExpiry: v.replace(/\D/g, "").slice(0, 8) }))} placeholder="20280315" numeric />
-              <EF label="주소 (지명)" value={editDL.dlAddr1 || ""} onChange={(v) => setEditDL((p) => ({ ...p, dlAddr1: v }))} placeholder="경기도 파주시" />
-              <EF label="주소 (도로명)" value={editDL.dlAddr2 || ""} onChange={(v) => setEditDL((p) => ({ ...p, dlAddr2: v }))} placeholder="운정로 67-24" />
-              <EF label="발급기관" value={editDL.dlIssuer || ""} onChange={(v) => setEditDL((p) => ({ ...p, dlIssuer: v }))} placeholder="경기남부경찰청장" />
+              <div className="mb-4"><label className="block text-[12px] text-gray-500 font-bold mb-1.5">이름</label><input type="text" value={editDL.dlName || ""} onChange={(e) => setEditDL((p) => ({ ...p, dlName: e.target.value }))} placeholder="홍길동" className="w-full h-12 border border-gray-200 rounded-xl px-4 text-[15px] outline-none focus:border-[#003764] bg-white" style={{ fontSize: "16px" }} /></div>
+              <div className="mb-4"><label className="block text-[12px] text-gray-500 font-bold mb-1.5">면허번호</label><input type="text" value={editDL.dlNumber || ""} onChange={(e) => setEditDL((p) => ({ ...p, dlNumber: e.target.value }))} placeholder="11-00-000000-00" className="w-full h-12 border border-gray-200 rounded-xl px-4 text-[15px] outline-none focus:border-[#003764] bg-white" style={{ fontSize: "16px" }} /></div>
+              <div className="mb-4"><label className="block text-[12px] text-gray-500 font-bold mb-1.5">면허종별</label><input type="text" value={editDL.dlType || ""} onChange={(e) => setEditDL((p) => ({ ...p, dlType: e.target.value }))} placeholder="1종 보통" className="w-full h-12 border border-gray-200 rounded-xl px-4 text-[15px] outline-none focus:border-[#003764] bg-white" style={{ fontSize: "16px" }} /></div>
+              <div className="mb-4"><label className="block text-[12px] text-gray-500 font-bold mb-1.5">주민번호 앞자리 (6자리)</label><input type="text" value={editDL.dlNumFront || ""} onChange={(e) => setEditDL((p) => ({ ...p, dlNumFront: e.target.value.replace(/\D/g, "").slice(0, 6) }))} placeholder="070204" className="w-full h-12 border border-gray-200 rounded-xl px-4 text-[15px] outline-none focus:border-[#003764] bg-white" style={{ fontSize: "16px" }} /></div>
+              <div className="mb-4"><label className="block text-[12px] text-gray-500 font-bold mb-1.5">발급일자 (8자리)</label><input type="text" value={editDL.dlIssueDate || ""} onChange={(e) => setEditDL((p) => ({ ...p, dlIssueDate: e.target.value.replace(/\D/g, "").slice(0, 8) }))} placeholder="20230627" className="w-full h-12 border border-gray-200 rounded-xl px-4 text-[15px] outline-none focus:border-[#003764] bg-white" style={{ fontSize: "16px" }} /></div>
+              <div className="mb-4"><label className="block text-[12px] text-gray-500 font-bold mb-1.5">갱신만료일 (8자리)</label><input type="text" value={editDL.dlExpiry || ""} onChange={(e) => setEditDL((p) => ({ ...p, dlExpiry: e.target.value.replace(/\D/g, "").slice(0, 8) }))} placeholder="20280315" className="w-full h-12 border border-gray-200 rounded-xl px-4 text-[15px] outline-none focus:border-[#003764] bg-white" style={{ fontSize: "16px" }} /></div>
+              <div className="mb-4"><label className="block text-[12px] text-gray-500 font-bold mb-1.5">주소 (지명)</label><input type="text" value={editDL.dlAddr1 || ""} onChange={(e) => setEditDL((p) => ({ ...p, dlAddr1: e.target.value }))} placeholder="경기도 파주시" className="w-full h-12 border border-gray-200 rounded-xl px-4 text-[15px] outline-none focus:border-[#003764] bg-white" style={{ fontSize: "16px" }} /></div>
+              <div className="mb-4"><label className="block text-[12px] text-gray-500 font-bold mb-1.5">주소 (도로명)</label><input type="text" value={editDL.dlAddr2 || ""} onChange={(e) => setEditDL((p) => ({ ...p, dlAddr2: e.target.value }))} placeholder="운정로 67-24" className="w-full h-12 border border-gray-200 rounded-xl px-4 text-[15px] outline-none focus:border-[#003764] bg-white" style={{ fontSize: "16px" }} /></div>
+              <div className="mb-4"><label className="block text-[12px] text-gray-500 font-bold mb-1.5">발급기관</label><input type="text" value={editDL.dlIssuer || ""} onChange={(e) => setEditDL((p) => ({ ...p, dlIssuer: e.target.value }))} placeholder="경기남부경찰청장" className="w-full h-12 border border-gray-200 rounded-xl px-4 text-[15px] outline-none focus:border-[#003764] bg-white" style={{ fontSize: "16px" }} /></div>
             </>
           )}
-
-          {/* 사진 선택 — 갤러리 또는 카메라 모두 가능 */}
           <div className="mt-4">
             <label className="block text-[12px] text-gray-500 font-bold mb-2">증명사진</label>
             <div className="flex items-center gap-3">
-              <button
-                onClick={() => fileRef.current?.click()}
-                className="h-10 px-4 border border-gray-200 rounded-lg text-[13px] font-medium text-gray-700 bg-white active:bg-gray-50"
-              >
+              <button onClick={() => fileRef.current?.click()} className="h-10 px-4 border border-gray-200 rounded-lg text-[13px] font-medium text-gray-700 bg-white">
                 갤러리/카메라 선택
               </button>
-              {pendingPhoto
-                ? <span className="text-[13px] text-green-600 font-bold">사진 선택됨 ✓</span>
-                : <span className="text-[13px] text-gray-400">선택된 파일 없음</span>
-              }
+              {pendingPhoto ? <span className="text-[13px] text-green-600 font-bold">✓ 선택됨</span> : <span className="text-[13px] text-gray-400">선택 안 함</span>}
             </div>
           </div>
-
           <div className="mt-6 flex gap-3">
-            <button
-              onClick={() => { setEditMode(false); setPendingPhoto(null); }}
-              className="flex-1 h-12 rounded-xl border border-gray-200 text-gray-600 font-bold text-[15px] bg-white"
-            >
-              닫기
-            </button>
-            <button
-              onClick={saveEdit}
-              className="flex-1 h-12 rounded-xl bg-[#003764] text-white font-bold text-[15px]"
-            >
-              저장
-            </button>
+            <button onClick={() => { setEditMode(false); setPendingPhoto(null); }} className="flex-1 h-12 rounded-xl border border-gray-200 text-gray-600 font-bold text-[15px] bg-white">닫기</button>
+            <button onClick={saveEdit} className="flex-1 h-12 rounded-xl bg-[#003764] text-white font-bold text-[15px]">저장</button>
           </div>
         </div>
       </div>
