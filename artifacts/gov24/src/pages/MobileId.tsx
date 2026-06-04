@@ -628,8 +628,7 @@ export default function MobileIdPage() {
   const qrData = idTab === "주민등록증" ? buildQrData(res) : buildDLQrData(dl);
 
   if (editMode) {
-    // ── EDIT MODE ──────────────────────────────────────────────
-    // type="text" + inputMode 사용 — type="number"는 iOS에서 키보드 자동 내림 버그 있음
+    // ── EDIT MODE ────────────────────────────────────────────
     function EF({ label, value, onChange, placeholder, numeric = false }: {
       label: string; value: string; onChange: (v: string) => void; placeholder?: string; numeric?: boolean;
     }) {
@@ -639,19 +638,11 @@ export default function MobileIdPage() {
           <input
             type="text"
             inputMode={numeric ? "numeric" : "text"}
-            autoComplete="off"
-            autoCorrect="off"
-            autoCapitalize="off"
-            spellCheck={false}
             value={value}
             onChange={(e) => onChange(e.target.value)}
-            onFocus={(e) => {
-              // 키보드 열린 후 해당 입력창이 보이도록 스크롤
-              setTimeout(() => e.target.scrollIntoView({ behavior: "smooth", block: "center" }), 300);
-            }}
             placeholder={placeholder}
-            className="w-full h-13 border-2 border-gray-200 rounded-xl px-4 text-[15px] outline-none focus:border-[#003764] bg-white transition-colors"
-            style={{ fontSize: "16px" /* 16px 미만이면 iOS가 자동 줌인하며 키보드 튐 */ }}
+            className="w-full h-12 border border-gray-200 rounded-xl px-4 text-[15px] outline-none focus:border-[#003764] bg-white transition-colors"
+            style={{ fontSize: "16px" }}
           />
         </div>
       );
@@ -659,29 +650,26 @@ export default function MobileIdPage() {
 
     return (
       <div className="fixed inset-0 bg-white flex flex-col" style={{ zIndex: 100 }}>
-        <input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFileChange} />
+        {/* 개발자 디버거 용: capture 속성 제거로 갤러리/카메라 모두 선택 가능 */}
+        <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
 
         {/* 헤더 */}
         <div className="flex items-center justify-between px-4 h-14 border-b border-gray-100 shrink-0 bg-white">
           <button onClick={() => { setEditMode(false); setPendingPhoto(null); }} className="w-9 h-9 flex items-center justify-center">
             <ChevronLeft className="w-5 h-5" />
           </button>
-          <span className="font-bold text-[16px]">신분증 정보 수정</span>
-          {/* 저장 버튼을 헤더에도 배치 — 키보드 올라와도 접근 가능 */}
-          <button
-            onClick={saveEdit}
-            className="px-3 h-8 bg-[#003764] text-white rounded-lg font-bold text-[13px]"
-          >
+          <span className="font-bold text-[16px]">정보 수정</span>
+          <button onClick={saveEdit} className="px-3 h-8 bg-[#003764] text-white rounded-lg font-bold text-[13px]">
             저장
           </button>
         </div>
 
-        {/* 스크롤 영역 — 키보드 열렸을 때 하단까지 충분한 패딩 */}
-        <div className="flex-1 overflow-y-auto no-scrollbar px-5 pt-4 pb-60">
+        {/* 스크롤 포스 영역 — 키보드 오류 방지를 위해 가장 단순하게 */}
+        <div className="flex-1 overflow-y-auto no-scrollbar px-5 pt-5 pb-32">
           {idTab === "주민등록증" ? (
             <>
               <EF label="이름" value={editRes.name || ""} onChange={(v) => setEditRes((p) => ({ ...p, name: v }))} placeholder="홍길동" />
-              <EF label="발급일자 (숫자만 8자리)" value={editRes.issueDate || ""} onChange={(v) => setEditRes((p) => ({ ...p, issueDate: v.replace(/\D/g, "").slice(0, 8) }))} placeholder="20230627" numeric />
+              <EF label="발급일자 (8자리)" value={editRes.issueDate || ""} onChange={(v) => setEditRes((p) => ({ ...p, issueDate: v.replace(/\D/g, "").slice(0, 8) }))} placeholder="20230627" numeric />
               <EF label="주민번호 앞자리 (6자리)" value={editRes.numberFront || ""} onChange={(v) => setEditRes((p) => ({ ...p, numberFront: v.replace(/\D/g, "").slice(0, 6) }))} placeholder="070204" numeric />
               <EF label="주민번호 뒷자리 (7자리)" value={editRes.numberBack || ""} onChange={(v) => setEditRes((p) => ({ ...p, numberBack: v.replace(/\D/g, "").slice(0, 7) }))} placeholder="3055215" numeric />
               <EF label="주소 (지명)" value={editRes.addr1 || ""} onChange={(v) => setEditRes((p) => ({ ...p, addr1: v }))} placeholder="경기도 파주시" />
@@ -703,15 +691,15 @@ export default function MobileIdPage() {
             </>
           )}
 
-          {/* 사진 업로드 */}
-          <div className="mt-2">
+          {/* 사진 선택 — 갤러리 또는 카메라 모두 가능 */}
+          <div className="mt-4">
             <label className="block text-[12px] text-gray-500 font-bold mb-2">증명사진</label>
             <div className="flex items-center gap-3">
               <button
                 onClick={() => fileRef.current?.click()}
-                className="h-11 px-5 border-2 border-gray-300 rounded-xl text-[14px] font-medium text-gray-700 bg-white active:bg-gray-50"
+                className="h-10 px-4 border border-gray-200 rounded-lg text-[13px] font-medium text-gray-700 bg-white active:bg-gray-50"
               >
-                📷 사진 선택
+                갤러리/카메라 선택
               </button>
               {pendingPhoto
                 ? <span className="text-[13px] text-green-600 font-bold">사진 선택됨 ✓</span>
@@ -720,19 +708,18 @@ export default function MobileIdPage() {
             </div>
           </div>
 
-          {/* 하단 저장 버튼 (스크롤 끝에도 보이도록) */}
           <div className="mt-6 flex gap-3">
             <button
               onClick={() => { setEditMode(false); setPendingPhoto(null); }}
-              className="flex-1 h-14 rounded-2xl border-2 border-gray-200 text-gray-600 font-bold text-[15px] bg-white"
+              className="flex-1 h-12 rounded-xl border border-gray-200 text-gray-600 font-bold text-[15px] bg-white"
             >
               닫기
             </button>
             <button
               onClick={saveEdit}
-              className="flex-1 h-14 rounded-2xl bg-[#003764] text-white font-bold text-[15px]"
+              className="flex-1 h-12 rounded-xl bg-[#003764] text-white font-bold text-[15px]"
             >
-              저장하기
+              저장
             </button>
           </div>
         </div>
