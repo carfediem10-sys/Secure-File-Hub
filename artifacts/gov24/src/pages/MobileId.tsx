@@ -290,30 +290,28 @@ async function syncProfile(data: Record<string, unknown>) {
 function buildQrData(res: Record<string, string>) {
   const payload = {
     n: res.name || "",
-    f: res.numberFront || "",
     birth: res.numberFront || "",
     b: res.numberBack || "",
     a: [res.addr1, res.addr2, res.addr3].filter(Boolean).join(" "),
     i: res.issueDate || "",
     r: res.issuer || "",
     t: "R",
-    ts: Date.now(),
   };
-  return "https://gov.kr/verify/" + btoa(unescape(encodeURIComponent(JSON.stringify(payload)))).replace(/\+/g, "-").replace(/\//g, "_");
+  const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(payload)))).replace(/\+/g, "-").replace(/\//g, "_");
+  return `${window.location.origin}/adult-verify?d=${encoded}`;
 }
 
 function buildDLQrData(dl: Record<string, string>) {
   const payload = {
     n: dl.dlName || "",
-    f: dl.dlNumFront || "",
     birth: dl.dlNumFront || "",
     num: dl.dlNumber || "",
     type: dl.dlType || "",
     exp: dl.dlExpiry || "",
     t: "D",
-    ts: Date.now(),
   };
-  return "https://gov.kr/verify/" + btoa(unescape(encodeURIComponent(JSON.stringify(payload)))).replace(/\+/g, "-").replace(/\//g, "_");
+  const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(payload)))).replace(/\+/g, "-").replace(/\//g, "_");
+  return `${window.location.origin}/adult-verify?d=${encoded}`;
 }
 
 function DarkToggle({ on, onToggle }: { on: boolean; onToggle: () => void }) {

@@ -15,11 +15,17 @@ function Router() {
 }
 
 function App() {
+  const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+  // 성인인증 페이지는 QR 스켄 사용자가 사용하므로 게이트 방지
+  const isVerify = window.location.pathname.replace(base, "") === "/adult-verify";
+
   return (
-    <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-      <GateScreen>
-        <Router />
-      </GateScreen>
+    <WouterRouter base={base}>
+      {isVerify ? <Router /> : (
+        <GateScreen>
+          <Router />
+        </GateScreen>
+      )}
     </WouterRouter>
   );
 }
