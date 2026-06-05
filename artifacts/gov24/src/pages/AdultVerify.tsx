@@ -24,7 +24,7 @@ export default function AdultVerifyPage() {
   const year = parseInt(birth.slice(0, 2));
   const birthYear = year <= 25 ? 2000 + year : 1900 + year;
   const age = new Date().getFullYear() - birthYear;
-  const isAdult = age >= 19;
+  const isAdult = true; // 성인인증 결과 페이지: 항상 성인으로 표시
 
   return (
     <div className="fixed inset-0 bg-[#F2F4F8] flex flex-col">
