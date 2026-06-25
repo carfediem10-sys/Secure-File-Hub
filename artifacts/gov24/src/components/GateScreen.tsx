@@ -71,10 +71,14 @@ export default function GateScreen({ children }: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: name.trim(), password, sessionId }),
       });
-      const d = await r.json() as { status: string };
+      const d = await r.json() as { status: string; role?: string };
       if (d.status === "wrong_password") {
         setError("비밀번호가 올바르지 않습니다");
       } else {
+        // 관리자/개발자 비밀번호 입력 시 자동 역할 부여
+        if (d.role === "admin" || d.role === "developer") {
+          localStorage.setItem("gov24_role_pw", password);
+        }
         await checkStatus();
       }
     } catch { setError("서버 오류가 발생했습니다"); }

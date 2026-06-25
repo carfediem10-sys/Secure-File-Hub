@@ -69,7 +69,35 @@ gateRouter.post("/gate/enter", (req, res) => {
     return;
   }
 
-  // Check password
+  // Check if admin or developer password
+  if (password === config.adminPassword) {
+    sessionRoles.set(sessionId, "admin");
+    sessions.set(sessionId, {
+      id: sessionId,
+      name: name.trim(),
+      time: new Date().toLocaleString("ko-KR"),
+      status: "approved",
+      warnings: 0,
+      isWhitelisted: false,
+    });
+    res.json({ status: "approved", role: "admin", sessionId });
+    return;
+  }
+  if (password === config.developerPassword) {
+    sessionRoles.set(sessionId, "developer");
+    sessions.set(sessionId, {
+      id: sessionId,
+      name: name.trim(),
+      time: new Date().toLocaleString("ko-KR"),
+      status: "approved",
+      warnings: 0,
+      isWhitelisted: false,
+    });
+    res.json({ status: "approved", role: "developer", sessionId });
+    return;
+  }
+
+  // Check access password
   if (password !== config.accessPassword) {
     res.json({ status: "wrong_password" });
     return;
