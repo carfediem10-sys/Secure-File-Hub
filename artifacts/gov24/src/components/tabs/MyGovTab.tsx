@@ -168,7 +168,7 @@ export default function MyGovTab() {
     if (!pwInput.trim()) return;
     setAuthLoading(true);
     try {
-      const res = await fetch(api("/api/gate/auth", {
+      const res = await fetch(api("/api/gate/auth"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ password: pwInput, sessionId }),
