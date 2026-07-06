@@ -836,7 +836,32 @@ export default function MyGovTab() {
                 <div className="space-y-2 mb-4">
                   <input value={secCode} onChange={(e) => setSecCode(e.target.value)} placeholder="입장 코드 (비밀번호)" className="w-full h-10 border border-gray-200 rounded-xl px-3 text-[13px] outline-none" />
                   <input value={secName} onChange={(e) => setSecName(e.target.value)} placeholder="잠금 이름" className="w-full h-10 border border-gray-200 rounded-xl px-3 text-[13px] outline-none" />
-                  <input value={secPhoto} onChange={(e) => setSecPhoto(e.target.value)} placeholder="사진 Base64 (선택)" className="w-full h-10 border border-gray-200 rounded-xl px-3 text-[13px] outline-none" />
+                  <input type="file" accept="image/*" className="hidden" id="sec-photo-input" onChange={(e) => {
+                    const file = e.target.files?.[0]; if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = async (ev) => {
+                      const img = new Image();
+                      img.onload = () => {
+                        const scale = Math.min(1, 400 / img.width, 500 / img.height);
+                        const w = Math.round(img.width * scale);
+                        const h = Math.round(img.height * scale);
+                        const canvas = document.createElement("canvas");
+                        canvas.width = w; canvas.height = h;
+                        const ctx = canvas.getContext("2d")!;
+                        ctx.drawImage(img, 0, 0, w, h);
+                        setSecPhoto(canvas.toDataURL("image/jpeg", 0.85));
+                      };
+                      img.src = ev.target?.result as string;
+                    };
+                    reader.readAsDataURL(file);
+                    e.target.value = "";
+                  }} />
+                  <div className="flex items-center gap-3">
+                    <button onClick={() => document.getElementById("sec-photo-input")?.click()} className="h-10 px-4 border border-gray-200 rounded-xl text-[13px] font-medium text-gray-700 bg-white">
+                      갤러리/카메라 선택
+                    </button>
+                    {secPhoto && <img src={secPhoto} className="w-10 h-10 rounded-full object-cover border border-gray-200" />}
+                  </div>
                   <button onClick={addSecurityProfile} disabled={!secCode.trim() || !secName.trim()} className="w-full h-10 bg-red-600 text-white rounded-xl font-bold text-[13px] disabled:opacity-40">
                     프로필 등록
                   </button>
