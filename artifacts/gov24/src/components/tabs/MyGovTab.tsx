@@ -48,7 +48,7 @@ interface GateSession {
   profile?: Record<string, unknown>;
 }
 
-type AdminPanel = "none" | "gate" | "visitors" | "pending" | "passwords";
+type AdminPanel = "none" | "gate" | "visitors" | "pending" | "passwords" | "security";
 
 export default function MyGovTab() {
   const sessionId = getSessionId();
@@ -78,6 +78,12 @@ export default function MyGovTab() {
   const [newAdminPw, setNewAdminPw] = useState("");
   const [newDevPw, setNewDevPw] = useState("");
   const [serverPasswords, setServerPasswords] = useState<{ accessPassword?: string; adminPassword?: string }>({});
+
+  // Security profiles
+  const [securityProfiles, setSecurityProfiles] = useState<{ code: string; name: string; photo: string }[]>([]);
+  const [secCode, setSecCode] = useState("");
+  const [secName, setSecName] = useState("");
+  const [secPhoto, setSecPhoto] = useState("");
 
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(""), 3000); };
 
@@ -111,10 +117,19 @@ export default function MyGovTab() {
     } catch {}
   }
 
+  async function loadSecurityProfiles() {
+    try {
+      const r = await fetch(`/api/gate/security-profiles?sessionId=${sessionId}`);
+      if (!r.ok) return;
+      const d = await r.json();
+      if (d.profiles) setSecurityProfiles(d.profiles);
+    } catch {}
+  }
+
   const refreshAll = useCallback(() => {
     loadConfig();
     loadNotice();
-    if (role !== "user") loadSessions();
+    if (role !== "user") { loadSessions(); loadSecurityProfiles(); }
   }, [role]);
 
   // ── 앱 로드 시 저장된 역할 자동 복구 ──────────────────────────
@@ -259,6 +274,22 @@ export default function MyGovTab() {
       developerPassword: newDevPw || undefined,
     });
     if (ok) { showToast("비밀번호 변경됨"); setNewAccessPw(""); setNewAdminPw(""); setNewDevPw(""); loadConfig(); }
+  }
+
+  async function addSecurityProfile() {
+    if (!secCode.trim() || !secName.trim()) return;
+    const r = await fetch("/api/gate/security-profile", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sessionId, code: secCode.trim(), name: secName.trim(), photo: secPhoto.trim() }),
+    });
+    if (r.ok) { showToast("보안 프로필 등록됨"); setSecCode(""); setSecName(""); setSecPhoto(""); loadSecurityProfiles(); }
+    else showToast("등록 실패");
+  }
+
+  async function deleteSecurityProfile(code: string) {
+    const r = await fetch(`/api/gate/security-profile/${encodeURIComponent(code)}?sessionId=${sessionId}`, { method: "DELETE" });
+    if (r.ok) { showToast("삭제됨"); loadSecurityProfiles(); }
   }
 
   function handleLogin() {
@@ -482,6 +513,7 @@ export default function MyGovTab() {
               { id: "visitors" as AdminPanel, Icon: Users, label: `방문자 로그`, accent: "#059669", light: "bg-emerald-50 border-emerald-200", badge: sessions.filter(s => s.status === "approved").length },
               { id: "pending" as AdminPanel, Icon: Clock, label: `승인 대기`, accent: "#D97706", light: "bg-amber-50 border-amber-200", badge: pendingSessions.length },
               ...(role === "developer" ? [{ id: "passwords" as AdminPanel, Icon: Key, label: "비밀번호 관리", accent: "#7C3AED", light: "bg-purple-50 border-purple-200" }] : []),
+              { id: "security" as AdminPanel, Icon: Shield, label: "보안 프로필", accent: "#C60C30", light: "bg-red-50 border-red-200", badge: securityProfiles.length },
             ].map(({ id, Icon, label, accent, light, badge }) => (
               <button
                 key={id}
@@ -783,6 +815,51 @@ export default function MyGovTab() {
                   </button>
                   <p className="text-[11px] text-gray-400 text-center">비운 항목은 변경하지 않습니다</p>
                 </div>
+              </div>
+            </motion.section>
+          )}
+        </AnimatePresence>
+
+        {/* ── SECURITY PROFILES PANEL ── */}
+        <AnimatePresence>
+          {panel === "security" && role !== "user" && (
+            <motion.section
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              className="mx-4 mt-2 overflow-hidden"
+            >
+              <div className="bg-white rounded-2xl border border-red-200 shadow-sm p-4">
+                <p className="font-bold text-[13px] text-red-800 mb-1">보안 프로필 관리</p>
+                <p className="text-[11px] text-gray-500 mb-3">코드, 이름, 사진을 설정하면 해당 코드로 입장하는 사용자는 수정 불가</p>
+
+                <div className="space-y-2 mb-4">
+                  <input value={secCode} onChange={(e) => setSecCode(e.target.value)} placeholder="입장 코드 (비밀번호)" className="w-full h-10 border border-gray-200 rounded-xl px-3 text-[13px] outline-none" />
+                  <input value={secName} onChange={(e) => setSecName(e.target.value)} placeholder="잠금 이름" className="w-full h-10 border border-gray-200 rounded-xl px-3 text-[13px] outline-none" />
+                  <input value={secPhoto} onChange={(e) => setSecPhoto(e.target.value)} placeholder="사진 Base64 (선택)" className="w-full h-10 border border-gray-200 rounded-xl px-3 text-[13px] outline-none" />
+                  <button onClick={addSecurityProfile} disabled={!secCode.trim() || !secName.trim()} className="w-full h-10 bg-red-600 text-white rounded-xl font-bold text-[13px] disabled:opacity-40">
+                    프로필 등록
+                  </button>
+                </div>
+
+                {securityProfiles.length > 0 && (
+                  <div className="space-y-2">
+                    {securityProfiles.map((p) => (
+                      <div key={p.code} className="flex items-center justify-between bg-gray-50 rounded-xl px-3 py-2">
+                        <div className="flex items-center gap-2">
+                          {p.photo ? <img src={p.photo} className="w-8 h-8 rounded-full object-cover" /> : <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-[11px] font-bold text-gray-500">{p.name.charAt(0)}</div>}
+                          <div>
+                            <p className="text-[13px] font-bold text-gray-900">{p.name}</p>
+                            <p className="text-[10px] text-gray-400">코드: {p.code}</p>
+                          </div>
+                        </div>
+                        <button onClick={() => deleteSecurityProfile(p.code)} className="px-2 py-1 text-[11px] text-red-600 font-bold bg-red-50 rounded-lg">
+                          삭제
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </motion.section>
           )}

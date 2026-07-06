@@ -880,9 +880,11 @@ export default function MobileIdPage() {
           <ChevronLeft className="w-5 h-5 text-gray-800" />
         </button>
         <span className="font-bold text-[16px] text-gray-900">모바일신분증</span>
-        <button onClick={startEdit} className="w-9 h-9 flex items-center justify-center">
-          <Menu className="w-5 h-5 text-gray-700" />
-        </button>
+        {localStorage.getItem("gov24_profile_locked") !== "1" && (
+          <button onClick={startEdit} className="w-9 h-9 flex items-center justify-center">
+            <Menu className="w-5 h-5 text-gray-700" />
+          </button>
+        )}
       </div>
 
       {/* Tab Bar */}

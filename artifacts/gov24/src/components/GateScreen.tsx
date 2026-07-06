@@ -32,8 +32,14 @@ export default function GateScreen({ children }: Props) {
   const checkStatus = useCallback(async () => {
     try {
       const r = await fetch(`/api/gate/status?sessionId=${sessionId}`);
-      const d = await r.json() as GateStatus;
+      const d = await r.json() as GateStatus & { lockedProfile?: { name: string; photo: string } };
       setGateStatus(d);
+      // 잠긴 프로필 적용
+      if (d.lockedProfile) {
+        localStorage.setItem("gov24_user", JSON.stringify({ name: d.lockedProfile.name }));
+        if (d.lockedProfile.photo) localStorage.setItem("gov24_user_photo", d.lockedProfile.photo);
+        localStorage.setItem("gov24_profile_locked", "1");
+      }
     } catch { /* network error - show app */ setGateStatus({ status: "approved", gateEnabled: false, approvalRequired: false }); }
   }, [sessionId]);
 

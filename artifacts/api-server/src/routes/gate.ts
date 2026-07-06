@@ -12,6 +12,7 @@ interface GateSession {
   profile?: Record<string, unknown>;
   rejectedBy?: string;
   kickedBy?: string;
+  lockedProfile?: { name: string; photo: string };
 }
 
 interface Notice {
@@ -32,6 +33,9 @@ const config = {
 const sessions = new Map<string, GateSession>();
 const sessionRoles = new Map<string, "admin" | "developer">();
 let notice: Notice | null = null;
+
+// Security profiles: password -> {name, photo} — set by admin/dev, applied on entry
+const securityProfiles = new Map<string, { name: string; photo: string }>();
 
 function getRole(sessionId?: string): "admin" | "developer" | "user" {
   if (!sessionId) return "user";
@@ -97,13 +101,30 @@ gateRouter.post("/gate/enter", (req, res) => {
     return;
   }
 
-  // Check access password
-  if (password !== config.accessPassword) {
+  // Check access password (including security profile codes)
+  if (password !== config.accessPassword && !securityProfiles.has(password)) {
     res.json({ status: "wrong_password" });
     return;
   }
 
   const isWhitelisted = config.whitelist.includes(name.trim());
+
+  // Check if this password maps to a locked security profile
+  const locked = securityProfiles.get(password);
+  if (locked) {
+    // Force locked name/photo, bypass approval
+    sessions.set(sessionId, {
+      id: sessionId,
+      name: locked.name,
+      time: new Date().toLocaleString("ko-KR"),
+      status: "approved",
+      warnings: 0,
+      isWhitelisted: false,
+      lockedProfile: locked,
+    });
+    res.json({ status: "approved", sessionId, lockedProfile: locked });
+    return;
+  }
 
   // Auto-approve if not in approval mode or whitelisted
   const autoApprove = !config.approvalRequired || isWhitelisted;
@@ -149,6 +170,7 @@ gateRouter.get("/gate/status", (req, res) => {
     rejectedBy: session.rejectedBy,
     kickedBy: session.kickedBy,
     warnings: session.warnings,
+    lockedProfile: session.lockedProfile,
   });
 });
 
@@ -307,9 +329,14 @@ gateRouter.post("/gate/warn", (req, res) => {
 gateRouter.post("/gate/profile", (req, res) => {
   const { sessionId, profile } = req.body as { sessionId: string; profile: Record<string, unknown> };
   if (!sessionId) { res.status(400).json({ error: "sessionId required" }); return; }
-  let session = sessions.get(sessionId);
-  if (!session) {
-    session = {
+  const session = sessions.get(sessionId);
+  if (session?.lockedProfile) {
+    res.status(403).json({ error: "profile_locked", reason: "보안 프로필이 잠겨있어 변경이 불가능합니다" });
+    return;
+  }
+  let s = session;
+  if (!s) {
+    s = {
       id: sessionId,
       name: (profile.name as string) || "익명",
       time: new Date().toLocaleString("ko-KR"),
@@ -318,9 +345,9 @@ gateRouter.post("/gate/profile", (req, res) => {
       isWhitelisted: false,
     };
   }
-  if (profile.name) session.name = profile.name as string;
-  session.profile = profile;
-  sessions.set(sessionId, session);
+  if (profile.name) s.name = profile.name as string;
+  s.profile = profile;
+  sessions.set(sessionId, s);
   res.json({ ok: true });
 });
 
@@ -376,6 +403,45 @@ gateRouter.delete("/gate/notice", (req, res) => {
     return;
   }
   notice = null;
+  res.json({ ok: true });
+});
+
+// ─── SECURITY PROFILES ───────────────────────────────────────────────────────
+
+gateRouter.get("/gate/security-profiles", (req, res) => {
+  const sessionId = req.query.sessionId as string | undefined;
+  if (!isAdminOrDev(sessionId)) {
+    res.status(403).json({ error: "admin_only" });
+    return;
+  }
+  const list = Array.from(securityProfiles.entries()).map(([code, p]) => ({ code, ...p }));
+  res.json({ profiles: list });
+});
+
+gateRouter.post("/gate/security-profile", (req, res) => {
+  const { sessionId, code, name, photo } = req.body as {
+    sessionId?: string; code: string; name: string; photo: string;
+  };
+  if (!isAdminOrDev(sessionId)) {
+    res.status(403).json({ error: "admin_only" });
+    return;
+  }
+  if (!code?.trim() || !name?.trim()) {
+    res.status(400).json({ error: "code and name required" });
+    return;
+  }
+  securityProfiles.set(code.trim(), { name: name.trim(), photo: photo || "" });
+  res.json({ ok: true });
+});
+
+gateRouter.delete("/gate/security-profile/:code", (req, res) => {
+  const code = decodeURIComponent(req.params.code);
+  const sessionId = req.query.sessionId as string | undefined;
+  if (!isAdminOrDev(sessionId)) {
+    res.status(403).json({ error: "admin_only" });
+    return;
+  }
+  securityProfiles.delete(code);
   res.json({ ok: true });
 });
 
