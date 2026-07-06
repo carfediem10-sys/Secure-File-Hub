@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Shield, Clock, X, AlertTriangle, Lock } from "lucide-react";
+import { api } from "../api";
 
 interface GateStatus {
   status: "none" | "pending" | "approved" | "rejected" | "kicked" | "blocked" | "wrong_password";
@@ -37,7 +38,7 @@ export default function GateScreen({ children }: Props) {
       return;
     }
     try {
-      const r = await fetch(`/api/gate/status?sessionId=${sessionId}`);
+      const r = await fetch(api(`/api/gate/status?sessionId=${sessionId}`));
       const d = await r.json() as GateStatus & { lockedProfile?: { name: string; photo: string } };
       setGateStatus(d);
       // 잠긴 프로필 적용
@@ -115,7 +116,7 @@ export default function GateScreen({ children }: Props) {
       const existingUser = JSON.parse(localStorage.getItem("gov24_user") ?? "{}");
       localStorage.setItem("gov24_user", JSON.stringify({ ...existingUser, name: name.trim() }));
 
-      const r = await fetch("/api/gate/enter", {
+      const r = await fetch(api("/api/gate/enter", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: name.trim(), password, sessionId }),

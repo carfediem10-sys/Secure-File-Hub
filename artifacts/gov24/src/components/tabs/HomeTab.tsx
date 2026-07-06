@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { api } from "../../api";
 import { useLocation } from "wouter";
 import { ChevronRight, ChevronLeft, Plus, Menu, User, Download, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -180,7 +181,7 @@ export default function HomeTab({ onOpenAi }: Props) {
   }, []);
 
   useEffect(() => {
-    fetch("/api/gate/notice")
+    fetch(api("/api/gate/notice")
       .then((r) => r.json())
       .then((d) => { if (d.notice) setNotice(d.notice); })
       .catch(() => {});

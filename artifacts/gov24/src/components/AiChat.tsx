@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { api } from "../api";
 import { X, Send, Bot } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 
@@ -48,7 +49,7 @@ export default function AiChat({ open, onClose }: Props) {
         role: m.type === "user" ? "user" : "assistant",
         content: m.text,
       }));
-      const res = await fetch("/api/chat", {
+      const res = await fetch(api("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: msg, history }),
