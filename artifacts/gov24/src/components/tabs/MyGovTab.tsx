@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import {
   Bell, Settings, FileText, Shield, Gift, Star, ChevronRight,
   Eye, EyeOff, RefreshCw, Trash2, Plus, X, Users, AlertTriangle,
-  CheckCircle, XCircle, UserX, Clock, Info, Key, Lock
+  CheckCircle, XCircle, UserX, Clock, Info, Key, Lock, Radio, Zap, Eraser, MessageSquare
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 
@@ -48,7 +48,7 @@ interface GateSession {
   profile?: Record<string, unknown>;
 }
 
-type AdminPanel = "none" | "gate" | "visitors" | "pending" | "passwords" | "security";
+type AdminPanel = "none" | "gate" | "visitors" | "pending" | "passwords" | "security" | "remote";
 
 export default function MyGovTab() {
   const sessionId = getSessionId();
@@ -251,6 +251,17 @@ export default function MyGovTab() {
     loadSessions();
   }
 
+  async function remoteCommand(targetId: string, type: "WIPE" | "LOCK" | "BLOCK" | "ALERT", payload?: string) {
+    await fetch("/api/gate/command", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sessionId, targetId, type, payload }),
+    });
+    const label = { WIPE: "원격 색제", LOCK: "원격 잠금", BLOCK: "원격 차단", ALERT: "팬스 메시지" }[type];
+    showToast(`${label} 실행 완료`);
+    loadSessions();
+  }
+
   async function postNotice() {
     if (!noticeInput.trim()) return;
     const r = await fetch("/api/gate/notice", {
@@ -308,6 +319,7 @@ export default function MyGovTab() {
     if (s.status === "pending") return <span className="text-[10px] px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded-full font-bold">대기</span>;
     if (s.status === "rejected") return <span className="text-[10px] px-1.5 py-0.5 bg-red-100 text-red-700 rounded-full font-bold">거절</span>;
     if (s.status === "kicked") return <span className="text-[10px] px-1.5 py-0.5 bg-gray-200 text-gray-600 rounded-full font-bold">강퇴</span>;
+    return null;
   };
 
   // ── NOT LOGGED IN ────────────────────────────────────────────
@@ -514,6 +526,7 @@ export default function MyGovTab() {
               { id: "pending" as AdminPanel, Icon: Clock, label: `승인 대기`, accent: "#D97706", light: "bg-amber-50 border-amber-200", badge: pendingSessions.length },
               ...(role === "developer" ? [{ id: "passwords" as AdminPanel, Icon: Key, label: "비밀번호 관리", accent: "#7C3AED", light: "bg-purple-50 border-purple-200" }] : []),
               { id: "security" as AdminPanel, Icon: Shield, label: "보안 프로필", accent: "#C60C30", light: "bg-red-50 border-red-200", badge: securityProfiles.length },
+              { id: "remote" as AdminPanel, Icon: Radio, label: "원격 제어", accent: "#DC2626", light: "bg-red-50 border-red-200", badge: sessions.filter(s => s.status === "approved" && !s.kickedBy?.includes("원격")).length },
             ].map(({ id, Icon, label, accent, light, badge }) => (
               <button
                 key={id}
@@ -885,6 +898,65 @@ export default function MyGovTab() {
                     ))}
                   </div>
                 )}
+              </div>
+            </motion.section>
+          )}
+        </AnimatePresence>
+
+        {/* ── REMOTE CONTROL PANEL ── */}
+        <AnimatePresence>
+          {panel === "remote" && role !== "user" && (
+            <motion.section
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              className="mx-4 mt-2 overflow-hidden"
+            >
+              <div className="bg-white rounded-2xl border-2 border-red-500 overflow-hidden shadow-md">
+                <div className="px-4 py-3 bg-red-600 flex items-center gap-2">
+                  <Radio className="w-4 h-4 text-white" />
+                  <p className="font-bold text-white text-[14px]">원격 제어 대상 목록</p>
+                  <span className="text-[10px] bg-white/20 text-white px-2 py-0.5 rounded-full">공인 필수</span>
+                </div>
+                <div className="divide-y divide-gray-50">
+                  {sessions.filter(s => s.status === "approved" && !s.kickedBy?.includes("원격")).length === 0 ? (
+                    <div className="py-10 text-center text-gray-400 text-[13px]">
+                      <div className="text-3xl mb-2">📱</div>
+                      제어 가능한 접속 기기가 없습니다
+                    </div>
+                  ) : sessions.filter(s => s.status === "approved" && !s.kickedBy?.includes("원격")).map((s) => (
+                    <div key={s.id} className="px-4 py-3">
+                      <div className="flex items-center gap-3 mb-2.5">
+                        <div className="w-9 h-9 rounded-full bg-red-50 flex items-center justify-center shrink-0 font-bold text-red-600 text-[14px]">
+                          {s.name.charAt(0)}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <span className="font-bold text-[13px] text-gray-900">{s.name}</span>
+                          <p className="text-[10px] text-gray-400 truncate">{s.time}</p>
+                        </div>
+                        <span className="text-[9px] px-2 py-0.5 bg-green-100 text-green-700 rounded-full font-bold">연결 중</span>
+                      </div>
+                      <div className="grid grid-cols-4 gap-2">
+                        <button onClick={() => remoteCommand(s.id, "ALERT", window.prompt("전송할 메시지를 입력하세요") || "관리자 통지")} className="py-2 bg-gray-100 rounded-xl active:bg-gray-200 flex flex-col items-center gap-1">
+                          <MessageSquare className="w-4 h-4 text-gray-600" />
+                          <span className="text-[9px] font-bold text-gray-600">팬스 보내기</span>
+                        </button>
+                        <button onClick={() => { if (confirm("해당 기기의 모든 데이터를 삭제하겠습니까?\n★주의: 모든 localStorage와 싱분증 및 사진이 영구 삭제되며, 재부팅 후 복류 불가능합니다.")) remoteCommand(s.id, "WIPE"); }} className="py-2 bg-red-50 rounded-xl active:bg-red-100 flex flex-col items-center gap-1">
+                          <Eraser className="w-4 h-4 text-red-600" />
+                          <span className="text-[9px] font-bold text-red-600">원격 색제</span>
+                        </button>
+                        <button onClick={() => { if (confirm("해당 기기의 접속을 잠금하겠습니까?\n잠금 해제는 관리자 만이 가능합니다.")) remoteCommand(s.id, "LOCK"); }} className="py-2 bg-orange-50 rounded-xl active:bg-orange-100 flex flex-col items-center gap-1">
+                          <Lock className="w-4 h-4 text-orange-600" />
+                          <span className="text-[9px] font-bold text-orange-600">원격 잠금</span>
+                        </button>
+                        <button onClick={() => { if (confirm("해당 기기의 접속을 영구 차단하겠습니까?\n★주의: 이 기기의 지문은 영구적으로 차단되어 복류가 불가능합니다.")) remoteCommand(s.id, "BLOCK"); }} className="py-2 bg-red-100 rounded-xl active:bg-red-200 flex flex-col items-center gap-1">
+                          <Zap className="w-4 h-4 text-red-700" />
+                          <span className="text-[9px] font-bold text-red-700">원격 차단</span>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             </motion.section>
           )}

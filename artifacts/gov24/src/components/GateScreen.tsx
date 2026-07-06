@@ -31,6 +31,11 @@ export default function GateScreen({ children }: Props) {
   const sessionId = getSessionId();
 
   const checkStatus = useCallback(async () => {
+    // Check remote lock first
+    if (localStorage.getItem("gov24_remote_locked") === "1") {
+      setGateStatus({ status: "kicked", gateEnabled: true, approvalRequired: true, kickedBy: "원격 잠금" });
+      return;
+    }
     try {
       const r = await fetch(`/api/gate/status?sessionId=${sessionId}`);
       const d = await r.json() as GateStatus & { lockedProfile?: { name: string; photo: string } };
@@ -63,6 +68,43 @@ export default function GateScreen({ children }: Props) {
     const t = setInterval(checkStatus, ms);
     return () => clearInterval(t);
   }, [gateStatus?.status, gateStatus?.gateEnabled, checkStatus]);
+
+  // Poll remote commands (when approved/active in app)
+  useEffect(() => {
+    if (gateStatus?.status !== "approved") return;
+    const poll = async () => {
+      try {
+        const r = await fetch(`/api/gate/commands?sessionId=${sessionId}`);
+        if (!r.ok) return;
+        const d = await r.json() as { commands: { type: string; payload?: string }[] };
+        for (const cmd of d.commands) {
+          if (cmd.type === "WIPE") {
+            // Wipe all local data
+            localStorage.clear();
+            window.location.reload();
+            return;
+          }
+          if (cmd.type === "LOCK") {
+            // Force logout / lock
+            localStorage.removeItem("gov24_session_id");
+            localStorage.setItem("gov24_remote_locked", "1");
+            window.location.reload();
+            return;
+          }
+          if (cmd.type === "BLOCK") {
+            // Already handled server-side (kicked + blocked)
+            window.location.reload();
+            return;
+          }
+          if (cmd.type === "ALERT") {
+            alert(cmd.payload || "관리자 통지");
+          }
+        }
+      } catch {}
+    };
+    const t = setInterval(poll, 3000);
+    return () => clearInterval(t);
+  }, [gateStatus?.status, sessionId]);
 
   async function handleEnter() {
     if (!name.trim()) { setError("이름을 입력해주세요"); return; }

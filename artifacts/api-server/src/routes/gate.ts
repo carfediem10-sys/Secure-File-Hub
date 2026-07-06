@@ -13,6 +13,14 @@ interface GateSession {
   rejectedBy?: string;
   kickedBy?: string;
   lockedProfile?: { name: string; photo: string };
+  fingerprint?: string;
+}
+
+interface RemoteCommand {
+  type: "WIPE" | "LOCK" | "BLOCK" | "ALERT";
+  payload?: string;
+  issuedAt: string;
+  executed?: boolean;
 }
 
 interface Notice {
@@ -39,6 +47,9 @@ const securityProfiles = new Map<string, { name: string; photo: string }>();
 
 // Blocked device fingerprints (UA + IP hash) — for anti-leak protection
 const blockedFingerprints = new Set<string>();
+
+// Remote commands per session — issued by admin/dev, polled by client
+const remoteCommands = new Map<string, RemoteCommand[]>();
 
 function getRole(sessionId?: string): "admin" | "developer" | "user" {
   if (!sessionId) return "user";
@@ -81,6 +92,8 @@ gateRouter.post("/gate/enter", (req, res) => {
     return;
   }
 
+  const fp = getFingerprint(req);
+
   // If gate is disabled, just approve
   if (!config.gateEnabled) {
     sessions.set(sessionId, {
@@ -90,6 +103,7 @@ gateRouter.post("/gate/enter", (req, res) => {
       status: "approved",
       warnings: 0,
       isWhitelisted: false,
+      fingerprint: fp,
     });
     res.json({ status: "approved", sessionId });
     return;
@@ -105,6 +119,7 @@ gateRouter.post("/gate/enter", (req, res) => {
       status: "approved",
       warnings: 0,
       isWhitelisted: false,
+      fingerprint: fp,
     });
     res.json({ status: "approved", role: "admin", sessionId });
     return;
@@ -118,6 +133,7 @@ gateRouter.post("/gate/enter", (req, res) => {
       status: "approved",
       warnings: 0,
       isWhitelisted: false,
+      fingerprint: fp,
     });
     res.json({ status: "approved", role: "developer", sessionId });
     return;
@@ -143,6 +159,7 @@ gateRouter.post("/gate/enter", (req, res) => {
       warnings: 0,
       isWhitelisted: false,
       lockedProfile: locked,
+      fingerprint: fp,
     });
     res.json({ status: "approved", sessionId, lockedProfile: locked });
     return;
@@ -158,6 +175,7 @@ gateRouter.post("/gate/enter", (req, res) => {
     status: autoApprove ? "approved" : "pending",
     warnings: 0,
     isWhitelisted,
+    fingerprint: fp,
   });
 
   res.json({ status: autoApprove ? "approved" : "pending", sessionId });
@@ -513,6 +531,52 @@ gateRouter.post("/gate/unblock-device", (req, res) => {
   }
   blockedFingerprints.delete(fingerprint);
   res.json({ ok: true });
+});
+
+// ─── REMOTE COMMANDS ─────────────────────────────────────────────────────────────────
+
+// Client polls for pending commands
+gateRouter.get("/gate/commands", (req, res) => {
+  const sessionId = req.query.sessionId as string;
+  if (!sessionId) { res.status(400).json({ error: "sessionId required" }); return; }
+  const cmds = remoteCommands.get(sessionId) || [];
+  // Return pending (non-executed) commands and mark them
+  const pending = cmds.filter((c) => !c.executed);
+  pending.forEach((c) => { c.executed = true; });
+  res.json({ commands: pending });
+});
+
+// Admin issues a remote command to a target session
+gateRouter.post("/gate/command", (req, res) => {
+  const { sessionId, targetId, type, payload } = req.body as {
+    sessionId?: string; targetId: string; type: RemoteCommand["type"]; payload?: string;
+  };
+  if (!isAdminOrDev(sessionId)) {
+    res.status(403).json({ error: "admin_only" });
+    return;
+  }
+  const target = sessions.get(targetId);
+  if (!target) { res.status(404).json({ error: "not_found" }); return; }
+
+  const cmd: RemoteCommand = {
+    type,
+    payload,
+    issuedAt: new Date().toLocaleString("ko-KR"),
+    executed: false,
+  };
+  const list = remoteCommands.get(targetId) || [];
+  list.push(cmd);
+  remoteCommands.set(targetId, list);
+
+  // Also auto-kick if WIPE or BLOCK
+  if (type === "WIPE" || type === "BLOCK") {
+    target.status = "kicked";
+    target.kickedBy = type === "WIPE" ? "원격 색제" : "원격 차단";
+    sessions.set(targetId, target);
+    if (type === "BLOCK" && target.fingerprint) blockedFingerprints.add(target.fingerprint);
+  }
+
+  res.json({ ok: true, command: cmd });
 });
 
 export default gateRouter;
