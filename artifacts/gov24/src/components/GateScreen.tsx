@@ -3,12 +3,13 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Shield, Clock, X, AlertTriangle, Lock } from "lucide-react";
 
 interface GateStatus {
-  status: "none" | "pending" | "approved" | "rejected" | "kicked" | "wrong_password";
+  status: "none" | "pending" | "approved" | "rejected" | "kicked" | "blocked" | "wrong_password";
   gateEnabled: boolean;
   approvalRequired: boolean;
   rejectedBy?: string;
   kickedBy?: string;
   warnings?: number;
+  error?: string;
 }
 
 function getSessionId() {
@@ -108,6 +109,23 @@ export default function GateScreen({ children }: Props) {
   // Gate disabled or approved
   if (!gateStatus.gateEnabled || gateStatus.status === "approved") {
     return <>{children}</>;
+  }
+
+  // Device blocked
+  if (gateStatus.status === "blocked") {
+    return (
+      <div className="fixed inset-0 bg-white flex flex-col items-center justify-center p-8 gap-6">
+        <div className="w-20 h-20 bg-red-50 rounded-full flex items-center justify-center">
+          <Shield className="w-10 h-10 text-red-500" />
+        </div>
+        <div className="text-center">
+          <h2 className="text-xl font-black text-gray-900 mb-2">접속 차단됨</h2>
+          <p className="text-[14px] text-gray-500">
+            보안 정책에 의해 해당 기기의 접속이 차단되었습니다.
+          </p>
+        </div>
+      </div>
+    );
   }
 
   // Rejected

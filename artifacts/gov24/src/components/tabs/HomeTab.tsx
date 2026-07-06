@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
-import { ChevronRight, ChevronLeft, Plus, Menu, User } from "lucide-react";
+import { ChevronRight, ChevronLeft, Plus, Menu, User, Download, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 // ── 데이터 ────────────────────────────────────────────────────
@@ -157,6 +157,21 @@ export default function HomeTab({ onOpenAi }: Props) {
   const [aiInput, setAiInput] = useState("");
   const slideRef = useRef<HTMLDivElement>(null);
 
+  // PWA install prompt
+  const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [showInstallBanner, setShowInstallBanner] = useState(false);
+  const installDismissed = localStorage.getItem("gov24_install_dismissed") === "1";
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      e.preventDefault();
+      setInstallPrompt(e as BeforeInstallPromptEvent);
+      if (!installDismissed) setShowInstallBanner(true);
+    };
+    window.addEventListener("beforeinstallprompt", handler);
+    return () => window.removeEventListener("beforeinstallprompt", handler);
+  }, []);
+
   useEffect(() => {
     const onStorage = () => setUserName(getUserName());
     window.addEventListener("storage", onStorage);
@@ -220,6 +235,51 @@ export default function HomeTab({ onOpenAi }: Props) {
           </button>
         </div>
       </header>
+
+      {/* ── PWA 설치 배너 ── */}
+      <AnimatePresence>
+        {showInstallBanner && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="mx-4 mt-3 bg-[#003764] rounded-2xl shadow-lg overflow-hidden"
+          >
+            <div className="flex items-center gap-3 px-4 py-3">
+              <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
+                <Download className="w-5 h-5 text-white" />
+              </div>
+              <div className="flex-1">
+                <p className="text-[13px] font-bold text-white">정부24 설치하기</p>
+                <p className="text-[11px] text-white/70">홈화면 추가하면 더 빠르게 이용할 수 있어요</p>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={async () => {
+                    if (installPrompt) {
+                      await installPrompt.prompt();
+                      const result = await installPrompt.userChoice;
+                      if (result.outcome === "accepted") {
+                        setShowInstallBanner(false);
+                        localStorage.setItem("gov24_install_dismissed", "1");
+                      }
+                    }
+                  }}
+                  className="px-3 h-8 bg-white text-[#003764] rounded-lg font-bold text-[12px]"
+                >
+                  설치
+                </button>
+                <button
+                  onClick={() => { setShowInstallBanner(false); localStorage.setItem("gov24_install_dismissed", "1"); }}
+                  className="w-7 h-7 flex items-center justify-center text-white/60"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* ── 스크롤 영역 ── */}
       <div className="flex-1 overflow-y-auto no-scrollbar">
