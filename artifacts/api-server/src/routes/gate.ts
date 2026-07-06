@@ -1,4 +1,6 @@
 import { Router } from "express";
+import { readFileSync, writeFileSync, existsSync } from "fs";
+import { join } from "path";
 
 const gateRouter = Router();
 
@@ -29,7 +31,7 @@ interface Notice {
   time: string;
 }
 
-const config = {
+const defaultConfig = {
   gateEnabled: false,
   approvalRequired: false,
   whitelist: [] as string[],
@@ -37,6 +39,28 @@ const config = {
   developerPassword: "roqkfwk!!",
   accessPassword: "yunu",
 };
+
+const DATA_DIR = join(process.cwd(), ".data");
+const CONFIG_FILE = join(DATA_DIR, "gate-config.json");
+
+function loadConfigFromDisk(): Partial<typeof defaultConfig> | null {
+  try {
+    if (!existsSync(CONFIG_FILE)) return null;
+    const raw = readFileSync(CONFIG_FILE, "utf-8");
+    return JSON.parse(raw) as Partial<typeof defaultConfig>;
+  } catch { return null; }
+}
+
+function saveConfigToDisk(cfg: typeof defaultConfig) {
+  try {
+    const { mkdirSync, existsSync } = require("fs");
+    if (!existsSync(DATA_DIR)) mkdirSync(DATA_DIR, { recursive: true });
+    writeFileSync(CONFIG_FILE, JSON.stringify(cfg, null, 2), "utf-8");
+  } catch {}
+}
+
+const saved = loadConfigFromDisk();
+const config = { ...defaultConfig, ...(saved ?? {}) };
 
 const sessions = new Map<string, GateSession>();
 const sessionRoles = new Map<string, "admin" | "developer">();
@@ -261,6 +285,8 @@ gateRouter.post("/gate/config", (req, res) => {
     if (developerPassword !== undefined && developerPassword.trim()) config.developerPassword = developerPassword.trim();
   }
 
+  saveConfigToDisk(config);
+
   res.json({ ok: true, gateEnabled: config.gateEnabled, approvalRequired: config.approvalRequired });
 });
 
@@ -411,6 +437,7 @@ gateRouter.post("/gate/whitelist", (req, res) => {
   }
   if (!name?.trim()) { res.status(400).json({ error: "name required" }); return; }
   if (!config.whitelist.includes(name.trim())) config.whitelist.push(name.trim());
+  saveConfigToDisk(config);
   res.json({ whitelist: config.whitelist });
 });
 
@@ -422,6 +449,7 @@ gateRouter.delete("/gate/whitelist/:name", (req, res) => {
     return;
   }
   config.whitelist = config.whitelist.filter((n) => n !== name);
+  saveConfigToDisk(config);
   res.json({ whitelist: config.whitelist });
 });
 
