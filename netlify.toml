@@ -1,0 +1,17 @@
+[build]
+  command = "pnpm install && pnpm --filter @workspace/gov24 run build"
+  publish = "artifacts/gov24/dist/public"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+[[redirects]]
+  from = "/api/*"
+  to = "https://your-api-server.com/api/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
