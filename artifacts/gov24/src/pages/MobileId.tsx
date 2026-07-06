@@ -280,7 +280,7 @@ async function syncProfile(data: Record<string, unknown>) {
       localStorage.setItem("gov24_session_id", id);
       return id;
     })();
-    await fetch(api("/api/gate/profile", {
+    await fetch(api("/api/gate/profile"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ sessionId, profile: data }),

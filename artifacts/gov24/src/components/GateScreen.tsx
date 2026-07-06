@@ -116,7 +116,7 @@ export default function GateScreen({ children }: Props) {
       const existingUser = JSON.parse(localStorage.getItem("gov24_user") ?? "{}");
       localStorage.setItem("gov24_user", JSON.stringify({ ...existingUser, name: name.trim() }));
 
-      const r = await fetch(api("/api/gate/enter", {
+      const r = await fetch(api("/api/gate/enter"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: name.trim(), password, sessionId }),

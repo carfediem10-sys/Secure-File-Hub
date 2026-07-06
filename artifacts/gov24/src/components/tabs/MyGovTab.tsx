@@ -112,7 +112,7 @@ export default function MyGovTab() {
 
   async function loadNotice() {
     try {
-      const r = await fetch(api("/api/gate/notice");
+      const r = await fetch(api("/api/gate/notice"));
       const d = await r.json();
       setNotice(d.notice ?? null);
     } catch {}
@@ -142,7 +142,7 @@ export default function MyGovTab() {
 
     const storedPw = localStorage.getItem("gov24_role_pw");
     if (storedPw) {
-      fetch(api("/api/gate/auth", {
+      fetch(api("/api/gate/auth"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ password: storedPw, sessionId }),
@@ -192,7 +192,7 @@ export default function MyGovTab() {
   }
 
   async function postConfig(updates: object) {
-    const r = await fetch(api("/api/gate/config", {
+    const r = await fetch(api("/api/gate/config"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ sessionId, ...updates }),
@@ -214,7 +214,7 @@ export default function MyGovTab() {
 
   async function addWhitelist() {
     if (!wlInput.trim()) return;
-    const r = await fetch(api("/api/gate/whitelist", {
+    const r = await fetch(api("/api/gate/whitelist"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name: wlInput.trim(), sessionId }),
@@ -230,22 +230,22 @@ export default function MyGovTab() {
   }
 
   async function approve(targetId: string) {
-    await fetch(api("/api/gate/approve", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId, targetId }) });
+    await fetch(api("/api/gate/approve"), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId, targetId }) });
     showToast("승인했습니다"); loadSessions();
   }
 
   async function reject(targetId: string) {
-    await fetch(api("/api/gate/reject", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId, targetId }) });
+    await fetch(api("/api/gate/reject"), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId, targetId }) });
     showToast("거절했습니다"); loadSessions();
   }
 
   async function kick(targetId: string) {
-    await fetch(api("/api/gate/kick", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId, targetId }) });
+    await fetch(api("/api/gate/kick"), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId, targetId }) });
     showToast("강퇴했습니다"); loadSessions();
   }
 
   async function warn(targetId: string) {
-    const r = await fetch(api("/api/gate/warn", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId, targetId }) });
+    const r = await fetch(api("/api/gate/warn"), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId, targetId }) });
     const d = await r.json();
     if (d.kicked) showToast("경고 2회 누적 — 영구 퇴장");
     else showToast(`경고 ${d.warnings}회 누적`);
@@ -253,7 +253,7 @@ export default function MyGovTab() {
   }
 
   async function remoteCommand(targetId: string, type: "WIPE" | "LOCK" | "BLOCK" | "ALERT", payload?: string) {
-    await fetch(api("/api/gate/command", {
+    await fetch(api("/api/gate/command"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ sessionId, targetId, type, payload }),
@@ -265,7 +265,7 @@ export default function MyGovTab() {
 
   async function postNotice() {
     if (!noticeInput.trim()) return;
-    const r = await fetch(api("/api/gate/notice", {
+    const r = await fetch(api("/api/gate/notice"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ text: noticeInput.trim(), author: user.name || "관리자", sessionId }),
@@ -290,7 +290,7 @@ export default function MyGovTab() {
 
   async function addSecurityProfile() {
     if (!secCode.trim() || !secName.trim()) return;
-    const r = await fetch(api("/api/gate/security-profile", {
+    const r = await fetch(api("/api/gate/security-profile"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ sessionId, code: secCode.trim(), name: secName.trim(), photo: secPhoto.trim() }),

@@ -49,7 +49,7 @@ export default function AiChat({ open, onClose }: Props) {
         role: m.type === "user" ? "user" : "assistant",
         content: m.text,
       }));
-      const res = await fetch(api("/api/chat", {
+      const res = await fetch(api("/api/chat"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: msg, history }),

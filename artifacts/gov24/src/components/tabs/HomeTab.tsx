@@ -181,7 +181,7 @@ export default function HomeTab({ onOpenAi }: Props) {
   }, []);
 
   useEffect(() => {
-    fetch(api("/api/gate/notice")
+    fetch(api("/api/gate/notice"))
       .then((r) => r.json())
       .then((d) => { if (d.notice) setNotice(d.notice); })
       .catch(() => {});
